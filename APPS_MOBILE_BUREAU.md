@@ -15,17 +15,19 @@ automatiquement dès le retour de la connexion.
 | **Android** | `apps/mobile/android` | fichier **`.apk`** installable directement |
 | **iPhone / iPad** | `apps/mobile/ios` | fichier **`.ipa`** (à re-signer avec iLoader/AltStore/Sideloadly) |
 | **Windows** | `apps/desktop` | installateur **`.exe`**, paquet **`.msi`** et version **portable `.exe`** |
-| **macOS / Linux** | `apps/desktop` | `.dmg` / `.AppImage` + `.deb` (en option) |
+| **Linux (Parrot OS, Debian, Ubuntu…)** | `apps/desktop` | **AppImage** (portable) et paquet **`.deb`** |
+| **macOS** | `apps/desktop` | `.dmg` (à compiler sur un Mac) |
 
 Le code de l'application embarquée est **commun** aux trois plateformes :
 `apps/mobile/www/` (interface, données, import/export Excel). Windows le réutilise
 tel quel au moment de la compilation.
 
-> ✅ **Les trois compilations ont été testées avec succès** et produisent :
+> ✅ **Les quatre compilations sont testées avec succès** et produisent :
 > - **Android** : `app-debug.apk` (installable directement sur téléphone/tablette)
 > - **iPhone** : `CAVALLY-unsigned.ipa`
 > - **Windows** : `CAVALLY Setup 1.0.0.exe` (installateur), `CAVALLY 1.0.0.msi`
 >   et `CAVALLY 1.0.0.exe` (portable, sans installation)
+> - **Linux** : `CAVALLY-1.0.0.AppImage` (portable) et `CAVALLY-1.0.0.deb`
 
 ---
 
@@ -51,6 +53,19 @@ tel quel au moment de la compilation.
   environ tous les 7 jours.
 - **Windows** : exécutez `CAVALLY Setup 1.0.0.exe` (ou le `.msi`). La version
   portable `.exe` se lance sans installation.
+- **Linux (Parrot OS, Debian, Ubuntu…)** : deux possibilités —
+  - **AppImage** (aucune installation) : rendez le fichier exécutable puis lancez-le
+    ```bash
+    chmod +x CAVALLY-*.AppImage
+    ./CAVALLY-*.AppImage
+    ```
+    > Si l'AppImage ne démarre pas sous Parrot, il peut manquer FUSE :
+    > `sudo apt install libfuse2` (ou `libfuse2t64`), puis relancez.
+  - **Paquet `.deb`** (installation système, icône dans le menu) :
+    ```bash
+    sudo apt install ./CAVALLY-*.deb
+    ```
+    puis lancez « CAVALLY » depuis le menu.
 
 ---
 
@@ -65,10 +80,11 @@ sur ses propres serveurs** et vous récupérez juste les fichiers finaux.
    - **Build Android (APK)**
    - **Build Windows (.exe / .msi)**
    - **Build iOS (IPA non signé)**
+   - **Build Linux (AppImage / .deb)**
 4. Cliquez **Run workflow** (bouton à droite).
 5. Attendez la fin (quelques minutes), puis téléchargez l'artefact
-   (« cavally-android-apk », « cavally-windows », « cavally-ios-ipa ») en bas de
-   la page du workflow.
+   (« cavally-android-apk », « cavally-windows », « cavally-ios-ipa »,
+   « cavally-linux ») en bas de la page du workflow.
 
 > Les workflows se déclenchent aussi automatiquement à chaque modification des
 > dossiers `apps/`.

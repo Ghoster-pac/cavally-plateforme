@@ -91,6 +91,7 @@ l'appareil) et l'import/export Excel sont embarqués, avec **sauvegarde en ligne
 - **Android** → fichier `.apk`
 - **iPhone / iPad** → fichier `.ipa` (à re-signer : iLoader / AltStore / Sideloadly)
 - **Windows** → installateur `.exe`, paquet `.msi`, version portable
+- **Linux (Parrot OS, Debian, Ubuntu…)** → **AppImage** (portable) et paquet **`.deb`**
 
 Elles se compilent **gratuitement via GitHub Actions** (onglet *Actions* du
 dépôt), sans installer d'outil. Guide complet :

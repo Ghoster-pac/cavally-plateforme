@@ -1,0 +1,48 @@
+name: Build Linux (AppImage / .deb)
+
+# Construit l'application de bureau pour Linux (Parrot OS, Debian, Ubuntu…) :
+# une AppImage (portable, exécutable sans installation) et un paquet .deb.
+# Onglet Actions → « Build Linux (AppImage / .deb) » → Run workflow,
+# puis télécharge l'artefact « cavally-linux ».
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "apps/desktop/**"
+      - "apps/mobile/www/**"
+      - ".github/workflows/build-linux.yml"
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Dépendances
+        working-directory: apps/desktop
+        run: npm ci || npm install
+
+      - name: Intégrer l'application embarquée (www)
+        working-directory: apps/desktop
+        run: node -e "require('fs').cpSync('../mobile/www','www',{recursive:true})"
+
+      - name: Construire (AppImage + .deb)
+        working-directory: apps/desktop
+        run: npx electron-builder --linux AppImage deb --publish never
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publier les fichiers
+        uses: actions/upload-artifact@v4
+        with:
+          name: cavally-linux
+          path: |
+            apps/desktop/dist/*.AppImage
+            apps/desktop/dist/*.deb
+          if-no-files-found: error
