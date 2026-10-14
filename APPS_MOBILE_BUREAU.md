@@ -1,22 +1,25 @@
 # Applications CAVALLY — Android (APK), iPhone (IPA) et Windows (.exe / .msi)
 
-Ce dossier contient les **applications natives** qui entourent la plateforme de
-suivi. Elles s'installent comme de vraies applications (icône, écran de
-démarrage, fenêtre dédiée) et **fonctionnent hors-ligne** : la saisie continue
-sans réseau, puis se **synchronise automatiquement** dès le retour de la
-connexion (grâce au mode hors-ligne de la plateforme).
+Ces applications sont **autonomes** : elles ne s'ouvrent **pas** sur le site en
+ligne. Elles contiennent leur propre interface et **enregistrent les données
+directement sur l'appareil**. Elles s'installent comme de vraies applications
+(icône, écran de démarrage, fenêtre dédiée) et **fonctionnent entièrement
+hors-ligne** : la saisie continue sans réseau, l'**import/export Excel** se fait
+sur l'appareil, et une **sauvegarde en ligne** (Supabase) est envoyée
+automatiquement dès le retour de la connexion.
 
 ## Ce qui est fourni
 
 | Application | Dossier | Ce qu'on obtient |
 |---|---|---|
 | **Android** | `apps/mobile/android` | fichier **`.apk`** installable directement |
-| **iPhone / iPad** | `apps/mobile/ios` | fichier **`.ipa`** (à re-signer avec AltStore/Sideloadly) |
+| **iPhone / iPad** | `apps/mobile/ios` | fichier **`.ipa`** (à re-signer avec iLoader/AltStore/Sideloadly) |
 | **Windows** | `apps/desktop` | installateur **`.exe`**, paquet **`.msi`** et version **portable `.exe`** |
 | **macOS / Linux** | `apps/desktop` | `.dmg` / `.AppImage` + `.deb` (en option) |
 
-Toutes pointent vers la plateforme en ligne (une seule adresse à changer, voir
-plus bas). Le bureau peut aussi être compilé pour Linux et macOS.
+Le code de l'application embarquée est **commun** aux trois plateformes :
+`apps/mobile/www/` (interface, données, import/export Excel). Windows le réutilise
+tel quel au moment de la compilation.
 
 > ✅ **Les trois compilations ont été testées avec succès** et produisent :
 > - **Android** : `app-debug.apk` (installable directement sur téléphone/tablette)
@@ -43,7 +46,9 @@ plus bas). Le bureau peut aussi être compilé pour Linux et macOS.
 - **Android** : transférez `app-debug.apk` sur le téléphone, ouvrez-le, et
   autorisez « Installer depuis cette source » si demandé.
 - **iPhone / iPad** : le `.ipa` n'est pas signé ; installez-le avec
-  **AltStore** ou **Sideloadly** (qui le re-signent pour votre appareil).
+  **iLoader**, **AltStore** ou **Sideloadly** (qui le re-signent pour votre
+  appareil). Avec un identifiant Apple gratuit, la signature doit être refaite
+  environ tous les 7 jours.
 - **Windows** : exécutez `CAVALLY Setup 1.0.0.exe` (ou le `.msi`). La version
   portable `.exe` se lance sans installation.
 
@@ -70,19 +75,36 @@ sur ses propres serveurs** et vous récupérez juste les fichiers finaux.
 
 ---
 
-## Réglage de l'adresse de la plateforme
+## Où sont stockées les données
 
-L'adresse est définie à **un seul endroit par application** :
+- **Sur l'appareil** : toutes les saisies, les locaux ajoutés/supprimés et les
+  commentaires sont enregistrés localement (aucun compte, aucun serveur requis).
+- **En ligne (sauvegarde)** : à chaque modification, l'application envoie aussi
+  la donnée vers **Supabase** dès qu'un réseau est disponible. Le bouton
+  **Sauvegarde → « ☁ Sauvegarder maintenant »** crée un instantané complet.
+  Le bouton **Restaurer** récupère la sauvegarde en ligne (utile après une
+  réinstallation ou un changement de téléphone).
+- **Excel** : l'**import** lit un fichier `.xlsx` et l'**export** régénère le
+  classeur complet (mêmes onglets, mises en forme, listes et graphique).
 
-- **Mobile** : `apps/mobile/capacitor.config.json` → `server.url`
-- **Bureau** : `apps/desktop/main.js` → `APP_URL` (ou variable d'environnement
-  `CAVALLY_URL`)
+> Pour récupérer des données déjà saisies sur la plateforme web : ouvrez la page
+> **Sauvegarde** du site, cliquez **« ☁ Sauvegarder maintenant »**, puis dans
+> l'application, page **Sauvegarde → Restaurer**. Sinon, exportez le fichier
+> Excel depuis le site et importez-le dans l'application.
 
-```json
-"server": { "url": "https://GhosterPacman.pythonanywhere.com" }
-```
+---
 
-Remplacez par votre adresse si elle change, puis relancez une compilation.
+## Réglage de l'adresse (facultatif)
+
+Les applications autonomes n'ont **pas** besoin d'adresse : elles chargent leur
+propre interface embarquée.
+
+- **Mobile** : rien à régler (`apps/mobile/capacitor.config.json` n'a plus de
+  `server.url`).
+- **Bureau** : si vous voulez forcer l'ouverture du **site en ligne** au lieu de
+  l'interface embarquée, définissez la variable d'environnement `CAVALLY_URL`
+  (voir `apps/desktop/main.js`). Par défaut, l'application de bureau est
+  autonome.
 
 ---
 
@@ -159,8 +181,19 @@ npx @capacitor/assets generate --android --ios
 
 ## Comment ça marche (architecture)
 
-Les applications sont des **coques natives** autour de la plateforme web : une
-fenêtre native (Android WebView, WKWebView iOS, Chromium Electron) qui charge la
-plateforme en ligne. Le **mode hors-ligne** et la **synchronisation automatique**
-sont gérés par la plateforme elle-même (service worker + file d'attente locale),
-donc les trois applications en bénéficient automatiquement, sans code spécifique.
+Les applications embarquent une **application autonome** (dossier
+`apps/mobile/www/`) : interface (HTML/CSS/JS), **gabarit Excel** et **moteur
+d'export** (JSZip) + **d'import** (SheetJS). Une coque native l'exécute :
+Android WebView / iOS WKWebView (Capacitor) ou Chromium (Electron pour Windows).
+
+- Les **données** sont conservées sur l'appareil (`localStorage`).
+- La **sauvegarde en ligne** parle directement à **Supabase** (REST) depuis
+  l'application ; une **file d'attente** conserve les changements tant qu'il n'y
+  a pas de réseau, puis les envoie automatiquement (disjoncteur de 60 s en cas
+  d'erreur).
+- L'**export Excel** patche le gabarit d'origine (XML) pour préserver la mise en
+  forme, les listes déroulantes et le graphique ; l'**import** relit le classeur
+  et fusionne les cellules.
+
+Le dossier `apps/desktop` réutilise **exactement** le même `www` : au moment de
+la compilation, le workflow copie `apps/mobile/www` dans `apps/desktop/www`.

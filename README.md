@@ -83,10 +83,13 @@ Fichiers concernés : `static/manifest.webmanifest` (manifeste),
 
 ### Applications natives (Android, iPhone, Windows)
 
-En plus de la PWA, le dépôt contient de **vraies applications installables** :
+En plus de la PWA, le dépôt contient de **vraies applications autonomes** :
+elles ne s'ouvrent **pas** sur le site — l'interface, les données (sur
+l'appareil) et l'import/export Excel sont embarqués, avec **sauvegarde en ligne**
+(Supabase) automatique.
 
 - **Android** → fichier `.apk`
-- **iPhone / iPad** → fichier `.ipa`
+- **iPhone / iPad** → fichier `.ipa` (à re-signer : iLoader / AltStore / Sideloadly)
 - **Windows** → installateur `.exe`, paquet `.msi`, version portable
 
 Elles se compilent **gratuitement via GitHub Actions** (onglet *Actions* du
