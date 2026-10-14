@@ -4,7 +4,10 @@
   "description": "Logiciel de bureau CAVALLY (Windows / macOS / Linux) — application autonome : saisie, import/export Excel et sauvegarde en ligne.",
   "private": true,
   "main": "main.js",
-  "author": "CET — Projet CAVALLY",
+  "author": {
+    "name": "CET — Projet CAVALLY",
+    "email": "cavally@example.com"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/Ghoster-pac/cavally-plateforme.git"
@@ -59,6 +62,8 @@
     "linux": {
       "icon": "build/icon.png",
       "category": "Office",
+      "maintainer": "CET — Projet CAVALLY <cavally@example.com>",
+      "synopsis": "Suivi des travaux CET — Projet CAVALLY",
       "target": ["AppImage", "deb"]
     }
   }
