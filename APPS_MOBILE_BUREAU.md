@@ -31,16 +31,35 @@ tel quel au moment de la compilation.
 
 ---
 
+## 📥 Téléchargement direct (fichiers prêts à l'emploi)
+
+Les fichiers déjà compilés sont sur la page de la version
+[**v1.0.0**](https://github.com/Ghoster-pac/cavally-plateforme/releases/tag/v1.0.0) :
+
+| Plateforme | Fichier | Lien direct |
+| --- | --- | --- |
+| Android | `CAVALLY-android.apk` | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.0/CAVALLY-android.apk) |
+| iPhone / iPad | `CAVALLY-iphone.ipa` | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.0/CAVALLY-iphone.ipa) |
+| Windows (installateur) | `CAVALLY-setup-windows.exe` | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.0/CAVALLY-setup-windows.exe) |
+| Windows (MSI) | `CAVALLY-windows.msi` | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.0/CAVALLY-windows.msi) |
+| Windows (portable) | `CAVALLY-portable-windows.exe` | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.0/CAVALLY-portable-windows.exe) |
+| **Linux (Parrot OS…)** | **`CAVALLY-linux-x86_64.AppImage`** | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.0/CAVALLY-linux-x86_64.AppImage) |
+| **Linux (Parrot OS…)** | **`CAVALLY-linux-x86_64.deb`** | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.0/CAVALLY-linux-x86_64.deb) |
+
+---
+
 ## ⭐ Récupérer les applications déjà compilées
 
 1. Ouvrez le dépôt **`Ghoster-pac/cavally-plateforme`** sur GitHub.
 2. Onglet **Actions**.
 3. Cliquez sur la compilation voulue (**Build Android (APK)**,
-   **Build Windows (.exe / .msi)** ou **Build iOS (IPA non signé)**).
+   **Build Windows (.exe / .msi)**, **Build iOS (IPA non signé)** ou
+   **Build Linux (AppImage / .deb)**).
 4. En bas de la page, section **Artifacts**, cliquez pour télécharger :
    - `cavally-android-apk` → contient `app-debug.apk`
    - `cavally-windows` → contient les `.exe` et `.msi`
    - `cavally-ios-ipa` → contient `CAVALLY-unsigned.ipa`
+   - `cavally-linux` → contient l'`AppImage` et le `.deb`
 5. Pour déclencher une nouvelle compilation : **Run workflow** (bouton à droite).
 
 ### Installation sur les appareils

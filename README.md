@@ -93,8 +93,10 @@ l'appareil) et l'import/export Excel sont embarqués, avec **sauvegarde en ligne
 - **Windows** → installateur `.exe`, paquet `.msi`, version portable
 - **Linux (Parrot OS, Debian, Ubuntu…)** → **AppImage** (portable) et paquet **`.deb`**
 
-Elles se compilent **gratuitement via GitHub Actions** (onglet *Actions* du
-dépôt), sans installer d'outil. Guide complet :
+Il existe des applications autonomes **déjà compilées** : voir la page
+[**version v1.0.0**](https://github.com/Ghoster-pac/cavally-plateforme/releases/tag/v1.0.0)
+ou, pour les construire vous-même, l'onglet *Actions* du dépôt (gratuit, sans
+installer d'outil). Guide complet :
 **[APPS_MOBILE_BUREAU.md](APPS_MOBILE_BUREAU.md)**.
 
 ## Déploiement en ligne
