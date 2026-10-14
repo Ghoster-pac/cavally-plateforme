@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Aide — Suivi CAVALLY{% endblock %}
+{% block content %}
+<div class="help">
+<h1>Mode d'emploi</h1>
+<p class="sub">Plateforme de suivi des travaux CET — Projet CAVALLY.</p>
+
+<div class="card">
+  <h3>1. Indiquer votre nom</h3>
+  <p>En haut à droite, saisissez votre nom. Il est mémorisé dans votre navigateur et attaché à chaque
+  modification (traçabilité). Aucun compte n'est nécessaire : l'accès se fait par le lien partagé.</p>
+
+  <h3>2. Saisir l'avancement</h3>
+  <p>Deux façons de travailler :</p>
+  <ul>
+    <li><strong>Par tâche</strong> (recommandé) : choisissez un lot, puis une tâche (ex. « POSE RÉSEAU EF »).
+      La liste des locaux s'affiche ; renseignez l'avancement, le statut et une observation.
+      Le <em>remplissage groupé</em> applique une valeur à toutes les lignes affichées (filtrées par niveau).</li>
+    <li><strong>Par local</strong> : depuis un lot, cliquez sur un local pour renseigner toutes ses tâches
+      et un commentaire général.</li>
+  </ul>
+  <p class="small muted">Chaque champ est enregistré automatiquement (quelques centaines de millisecondes
+  après la dernière frappe).</p>
+
+  <h3>3. Statuts</h3>
+  <ul>
+    <li><strong>Non démarré</strong> · <strong>En cours</strong> · <strong>Terminé</strong> ·
+      <strong>Bloqué</strong> · <strong>Non conforme</strong> · <strong>À vérifier</strong></li>
+  </ul>
+  <p>Le statut global d'un local et sa moyenne sont recalculés automatiquement à partir des tâches.</p>
+
+  <h3>4. Importer</h3>
+  <p>Page <em>Importer</em> : déposez un classeur rempli (même modèle) pour fusionner les données.
+  Utile pour réintégrer un fichier travaillé hors ligne.</p>
+
+  <h3>5. Générer le fichier Excel</h3>
+  <p>Page <em>Exporter</em> : téléchargez le classeur complet, identique au modèle, rempli avec les saisies
+  de tous les intervenants.</p>
+
+  <h3>Raccourcis utiles</h3>
+  <ul>
+    <li>Filtrer par niveau puis « Remplissage groupé » pour traiter un étage entier rapidement.</li>
+    <li>Le libellé « voir toutes les tâches → » ouvre la fiche complète d'un local.</li>
+  </ul>
+</div>
+</div>
+{% endblock %}

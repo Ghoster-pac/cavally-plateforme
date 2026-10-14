@@ -1,0 +1,23 @@
+# Configuration Render (option Docker).
+#
+# ATTENTION : en plan gratuit, Render n'accepte pas les disques persistants,
+# donc la base SQLite est perdue à chaque veille/redéploiement. Pour conserver
+# les données, passe à un plan payant et ajoute un disque monté sur /data
+# (décommente le bloc "disk" ci-dessous), ou utilise PythonAnywhere/Fly.io.
+services:
+  - type: web
+    name: cavally-suivi
+    env: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: CAVALLY_DB
+        value: /data/cavally.db
+      - key: CAVALLY_JOURNAL
+        value: DELETE
+      - key: CAVALLY_SECRET
+        generateValue: true
+    # disk:                      # necessite un plan payant
+    #   name: cavally-data
+    #   mountPath: /data
+    #   sizeGB: 1

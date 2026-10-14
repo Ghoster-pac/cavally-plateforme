@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Importer un fichier — Suivi CAVALLY{% endblock %}
+{% block content %}
+<h1>Importer un fichier Excel</h1>
+<p class="sub">Déposez un classeur déjà rempli (même modèle que « SUIVI TRAVAUX CAVALLY »). Les avancements,
+statuts et observations des 4 feuilles de lots seront fusionnés dans la base.</p>
+
+<div class="grid cols-2">
+  <div class="card">
+    <form method="post" enctype="multipart/form-data">
+      <input type="hidden" name="user" id="userField">
+      <label class="small muted">Fichier .xlsx</label><br>
+      <input type="file" name="file" accept=".xlsx,.xlsm" required style="margin:10px 0 16px">
+      <p class="small muted">Les feuilles reconnues sont : AVANCEMENT PBS, AVANCEMENT CVC, AVCT CFO,
+        AVANCEMENT CFA-SSI. Les formules de synthèse du fichier ne sont pas reprises (elles sont recalculées
+        automatiquement à l'export).</p>
+      <button class="btn primary" type="submit">Importer et fusionner</button>
+    </form>
+  </div>
+  <div class="card">
+    <strong>Bon à savoir</strong>
+    <ul class="small">
+      <li>L'import <strong>écrase</strong> les valeurs existantes pour les cellules présentes dans le fichier.</li>
+      <li>Les cellules vides du fichier ne suppriment rien.</li>
+      <li>Les niveaux/locaux doivent correspondre au modèle (les lignes sont repérées par numéro de ligne).</li>
+      <li>Pour repartir du modèle vierge : <a href="{{ url_for('export_page') }}">générez puis réimportez</a>.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById("userField").value = Cav.getUser() || "Anonyme";
+</script>
+{% endblock %}

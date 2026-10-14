@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Tableau de bord des travaux CET</h1>
+<p class="sub">Projet CAVALLY — avancement consolidé de tous les lots, mis à jour en temps réel.</p>
+
+<div class="grid cols-4">
+  <div class="card kpi">
+    <span class="lbl">Avancement global</span>
+    <span class="big">{{ (summary.global*100)|round(1) }} %</span>
+    <div class="bar"><span style="width: {{ (summary.global*100)|round(1) }}%"></span></div>
+  </div>
+  {% for l in summary.lots %}
+  <div class="card kpi">
+    <span class="lbl">{{ l.label }}</span>
+    <span class="big">{{ (l.avancement*100)|round(1) }} %</span>
+    <div class="bar"><span style="width: {{ (l.avancement*100)|round(1) }}%"></span></div>
+    <span class="small muted">{{ l.nb_locaux }} locaux · {{ l.nb_taches }} tâches de suivi</span>
+    <a class="btn mini" href="{{ url_for('lot_page', key=l.key) }}">Ouvrir le lot →</a>
+  </div>
+  {% endfor %}
+</div>
+
+<h2>Répartition des statuts par lot</h2>
+<div class="grid cols-2">
+  {% for l in summary.lots %}
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <strong>{{ l.label }}</strong>
+      <a class="small" href="{{ url_for('lot_page', key=l.key) }}">détail →</a>
+    </div>
+    <div class="bar" style="margin:8px 0"><span style="width: {{ (l.avancement*100)|round(1) }}%"></span></div>
+    <div class="pill-count">
+      {% for s in ['Terminé','En cours','Non démarré','Bloqué','Non conforme','À vérifier'] %}
+        <span class="p"><span class="dot" style="background:
+          {% if s=='Terminé' %}#16a34a{% elif s=='En cours' %}#2563eb{% elif s=='Bloqué' %}#dc2626
+          {% elif s=='Non conforme' %}#d97706{% elif s=='À vérifier' %}#7c3aed{% else %}#94a3b8{% endif %}"></span>
+          {{ s }} <span class="badge">{{ l.status_counts[s] }}</span></span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<h2>Activité récente</h2>
+<div class="card">
+  {% if activity %}
+  <table>
+    <thead><tr><th>Date</th><th>Utilisateur</th><th>Lot</th><th>Local (ligne)</th><th>Tâche</th><th>Champ</th><th>Nouvelle valeur</th></tr></thead>
+    <tbody>
+      {% for e in activity %}
+      <tr>
+        <td class="small nowrap">{{ e.ts }}</td>
+        <td>{{ e.user }}</td>
+        <td>{{ e.lot }}</td>
+        <td>{{ e.row }}</td>
+        <td class="small">{{ e.task }}</td>
+        <td>{{ e.field }}</td>
+        <td>{{ e.new_value }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted">Aucune modification pour l'instant. Ouvrez un lot pour commencer la saisie.</p>
+  {% endif %}
+</div>
+
+<h2>Détail des tâches par lot</h2>
+<div class="grid cols-2">
+  {% for l in summary.lots %}
+  <div class="card">
+    <strong>{{ l.label }}</strong>
+    <table style="margin-top:8px">
+      <thead><tr><th>Tâche</th><th class="right">Avancement</th><th class="right">Renseigné</th><th></th></tr></thead>
+      <tbody>
+      {% for t in l.tasks %}
+        <tr>
+          <td class="small">{{ t.label }}</td>
+          <td class="right nowrap">{{ (t.moyenne*100)|round(1) }} %</td>
+          <td class="right small muted">{{ t.saisis }}/{{ t.total }}</td>
+          <td class="right"><a class="btn mini" href="{{ url_for('task_page', key=l.key, task_id=t.id) }}">Saisir</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

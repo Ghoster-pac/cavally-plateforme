@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}{{ task.label }} — {{ lot.label }}{% endblock %}
+{% block content %}
+<p class="sub"><a href="{{ url_for('home') }}">Tableau de bord</a> ·
+  <a href="{{ url_for('lot_page', key=lot.key) }}">{{ lot.label }}</a></p>
+<h1>{{ lot.label }} — <span style="color:var(--primary)">{{ task.label }}</span></h1>
+<p class="sub">Saisie rapide : renseignez l'avancement (0–100 %), le statut et une observation pour chaque local.
+  <span id="saved" class="saved">✓ enregistré</span></p>
+
+<div class="toolbar">
+  <div>
+    <label class="small muted">Niveau</label><br>
+    <select id="fNiveau" style="min-width:150px">
+      <option value="">Tous les niveaux</option>
+      {% for lv in lot.levels %}<option value="{{ lv }}">{{ lv }}</option>{% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="small muted">Recherche</label><br>
+    <input id="fSearch" type="text" placeholder="Nom du local…" style="min-width:200px">
+  </div>
+  <div class="grow"></div>
+  <div>
+    <label class="small muted">Tâche</label><br>
+    <select id="fTask" style="min-width:220px">
+      {% for t in lot.tasks %}<option value="{{ t.id }}" {{ 'selected' if t.id==task.id }}>{{ t.label }}</option>{% endfor %}
+    </select>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <strong class="small">Remplissage groupé</strong> — appliquer aux lignes affichées :
+  <div class="toolbar" style="margin:10px 0 0">
+    <div><label class="small muted">Avancement %</label><br><input id="massAv" type="number" min="0" max="100" step="5" style="width:90px"></div>
+    <div><label class="small muted">Statut</label><br>
+      <select id="massSt" style="width:160px"><option value="">(ne pas changer)</option>
+        {% for s in statuses %}<option>{{ s }}</option>{% endfor %}</select></div>
+    <div><label class="small muted">&nbsp;</label><br><button class="btn primary" id="applyMass">Appliquer aux lignes affichées</button></div>
+    <div class="small muted" id="massCount"></div>
+  </div>
+</div>
+
+<div class="tablewrap">
+  <table id="grid">
+    <thead>
+      <tr>
+        <th class="sticky-col" style="min-width:80px">Niveau</th>
+        <th style="min-width:260px">Désignation</th>
+        <th style="width:100px">Avancement %</th>
+        <th style="width:170px">Statut</th>
+        <th style="min-width:220px">Observation</th>
+      </tr>
+    </thead>
+    <tbody id="gridBody"><tr><td colspan="5" class="muted">Chargement…</td></tr></tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const LOT_KEY = {{ lot.key|tojson }};
+const TASK_ID = {{ task.id|tojson }};
+const STATUSES = {{ statuses|tojson }};
+const savedEl = document.getElementById("saved");
+const saver = Cav.saver(() => { savedEl.classList.add("show"); setTimeout(()=>savedEl.classList.remove("show"),1200); });
+let ROWS = [];
+
+function rowEl(r){
+  const tr = document.createElement("tr");
+  tr.dataset.row = r.row;
+  tr.dataset.niveau = r.niveau;
+  tr.dataset.designation = r.designation;
+  const av100 = (r.av === "" || r.av === null || r.av === undefined) ? "" : (parseFloat(r.av)*100);
+  tr.innerHTML = `
+    <td class="sticky-col nowrap">${Cav.esc(r.niveau)}</td>
+    <td>${Cav.esc(r.designation)}
+      <div class="small"><a href="/lot/${LOT_KEY}/local/${r.row}">voir toutes les tâches →</a></div></td>
+    <td><input class="field-av av" type="number" min="0" max="100" step="5" value="${av100}"></td>
+    <td><select class="st">${STATUSES.map(s=>`<option ${s===r.st?'selected':''}>${Cav.esc(s)}</option>`).join("")}</select></td>
+    <td><input class="field-obs obs" type="text" value="${Cav.esc(r.obs)}" placeholder="observation…"></td>`;
+  return tr;
+}
+
+function render(){
+  const tb = document.getElementById("gridBody");
+  tb.innerHTML = "";
+  const frag = document.createDocumentFragment();
+  ROWS.forEach(r => frag.appendChild(rowEl(r)));
+  tb.appendChild(frag);
+  updateMassCount();
+}
+
+document.addEventListener("change", (e) => {
+  const tr = e.target.closest("tr");
+  if (!tr) return;
+  const row = +tr.dataset.row;
+  if (e.target.classList.contains("av")) {
+    const v = e.target.value.trim();
+    const frac = v === "" ? "" : (parseFloat(v)/100);
+    saver.push(`${LOT_KEY}|${row}|${TASK_ID}|av`, {lot:LOT_KEY,row,task:TASK_ID,field:"av",value:frac===""?"":frac});
+  } else if (e.target.classList.contains("st")) {
+    saver.push(`${LOT_KEY}|${row}|${TASK_ID}|st`, {lot:LOT_KEY,row,task:TASK_ID,field:"st",value:e.target.value});
+  } else if (e.target.classList.contains("obs")) {
+    saver.push(`${LOT_KEY}|${row}|${TASK_ID}|obs`, {lot:LOT_KEY,row,task:TASK_ID,field:"obs",value:e.target.value});
+  }
+});
+
+function visibleRows(){
+  const lv = document.getElementById("fNiveau").value;
+  const q = document.getElementById("fSearch").value.toLowerCase();
+  return Array.from(document.querySelectorAll("#gridBody tr")).filter(tr => {
+    if (lv && tr.dataset.niveau !== lv) return false;
+    if (q && !tr.dataset.designation.toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+function applyFilter(){
+  const set = new Set(visibleRows());
+  document.querySelectorAll("#gridBody tr").forEach(tr => tr.style.display = set.has(tr) ? "" : "none");
+  updateMassCount();
+}
+function updateMassCount(){ document.getElementById("massCount").textContent = visibleRows().length + " ligne(s) affichée(s)"; }
+
+document.getElementById("fNiveau").addEventListener("change", applyFilter);
+document.getElementById("fSearch").addEventListener("input", applyFilter);
+document.getElementById("fTask").addEventListener("change", (e) => {
+  window.location = `/lot/${LOT_KEY}/task/${e.target.value}`;
+});
+
+document.getElementById("applyMass").addEventListener("click", () => {
+  const avRaw = document.getElementById("massAv").value.trim();
+  const st = document.getElementById("massSt").value;
+  if (avRaw === "" && st === "") { Cav.toast("Rien à appliquer", "err"); return; }
+  const rows = visibleRows();
+  if (!rows.length) return;
+  if (!confirm(`Appliquer à ${rows.length} ligne(s) affichée(s) ?`)) return;
+  rows.forEach(tr => {
+    const row = +tr.dataset.row;
+    if (avRaw !== "") {
+      tr.querySelector(".av").value = avRaw;
+      saver.push(`${LOT_KEY}|${row}|${TASK_ID}|av`, {lot:LOT_KEY,row,task:TASK_ID,field:"av",value:parseFloat(avRaw)/100});
+    }
+    if (st !== "") {
+      tr.querySelector(".st").value = st;
+      saver.push(`${LOT_KEY}|${row}|${TASK_ID}|st`, {lot:LOT_KEY,row,task:TASK_ID,field:"st",value:st});
+    }
+  });
+  Cav.toast(rows.length + " ligne(s) mises à jour", "ok");
+});
+
+Cav.api(`/api/lot/${LOT_KEY}/task/${TASK_ID}`).then(d => { ROWS = d.rows; render(); applyFilter(); })
+  .catch(e => Cav.toast("Erreur chargement : " + e.message, "err"));
+</script>
+{% endblock %}

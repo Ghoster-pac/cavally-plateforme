@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Exporter — Suivi CAVALLY{% endblock %}
+{% block content %}
+<h1>Générer le fichier Excel</h1>
+<p class="sub">Le fichier produit reprend exactement le modèle d'origine : mises en forme, listes déroulantes,
+graphique du tableau de bord et onglets de synthèse — remplis avec les données saisies par chacun.</p>
+
+<div class="grid cols-2">
+  <div class="card kpi">
+    <span class="lbl">Avancement global actuel</span>
+    <span class="big">{{ (summary.global*100)|round(1) }} %</span>
+    <div class="grid cols-2" style="margin-top:10px">
+      {% for l in summary.lots %}
+        <div><strong class="small">{{ l.label }}</strong>
+          <div class="bar sm"><span style="width: {{ (l.avancement*100)|round(1) }}%"></span></div>
+          <span class="small muted">{{ (l.avancement*100)|round(1) }} %</span>
+        </div>
+      {% endfor %}
+    </div>
+    <form method="post" action="{{ url_for('export_download') }}" style="margin-top:18px">
+      <button class="btn primary" type="submit">⬇ Télécharger le classeur complet</button>
+    </form>
+    <p class="small muted" style="margin-top:10px">Nom du fichier :<br>
+      <code>SUIVI TRAVAUX CAVALLY - JJMMAAAA.xlsx</code></p>
+  </div>
+  <div class="card">
+    <strong>Contenu du fichier</strong>
+    <ul class="small">
+      <li><strong>TABLEAU DE BORD</strong> — synthèse par lot (avancement, statuts) + graphique</li>
+      <li><strong>AVANCEMENT PAR NIVEAU</strong> — avancement par niveau et par lot</li>
+      <li><strong>AVANCEMENT PBS / CVC / AVCT CFO / CFA-SSI</strong> — saisie détaillée</li>
+      <li><strong>RECAP GENERAL</strong> — récapitulatif des lots</li>
+    </ul>
+    <p class="small muted">Ouvre le fichier dans Excel ou LibreOffice : il se recalcule automatiquement
+      (les moyennes et statuts sont recalculés à l'ouverture).</p>
+  </div>
+</div>
+{% endblock %}

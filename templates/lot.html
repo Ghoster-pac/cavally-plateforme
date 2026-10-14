@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{{ lot.label }} — Suivi CAVALLY{% endblock %}
+{% block content %}
+<p class="sub"><a href="{{ url_for('home') }}">← Tableau de bord</a></p>
+<h1>{{ lot.label }}</h1>
+<p class="sub">{{ lot.rows|length }} locaux · {{ lot.tasks|length }} tâches · Avancement moyen
+  <strong>{{ (lot_sum.avancement*100)|round(1) }} %</strong></p>
+
+<div class="toolbar">
+  <a class="btn primary" href="{{ url_for('task_page', key=lot.key, task_id=lot.tasks[0].id) }}">Saisir une tâche</a>
+  <a class="btn" href="{{ url_for('export_page') }}">Exporter le fichier Excel</a>
+</div>
+
+<h2>Avancement par niveau</h2>
+<div class="grid cols-2">
+  {% for lv in lot_sum.levels %}
+  <div class="card">
+    <div style="display:flex;justify-content:space-between">
+      <strong>{{ lv.niveau }}</strong><span>{{ (lv.moyenne*100)|round(1) }} %</span>
+    </div>
+    <div class="bar" style="margin-top:6px"><span style="width: {{ (lv.moyenne*100)|round(1) }}%"></span></div>
+    <span class="small muted">{{ lv.total }} local(aux) renseigné(s)</span>
+  </div>
+  {% endfor %}
+</div>
+
+<h2>Tâches du lot</h2>
+<div class="card">
+  <table>
+    <thead><tr><th>Tâche</th><th class="right">Avancement moyen</th><th class="right">Renseigné</th><th></th></tr></thead>
+    <tbody>
+    {% for t in lot_sum.tasks %}
+      <tr>
+        <td>{{ t.label }}</td>
+        <td class="right nowrap">{{ (t.moyenne*100)|round(1) }} %</td>
+        <td class="right muted">{{ t.saisis }}/{{ t.total }}</td>
+        <td class="right"><a class="btn mini" href="{{ url_for('task_page', key=lot.key, task_id=t.id) }}">Saisir</a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2>Locaux du lot</h2>
+{% for lvl in lot.levels %}
+<div class="card" style="margin-bottom:12px">
+  <strong>{{ lvl }}</strong>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+    {% for r in lot.rows if r.niveau == lvl %}
+      <a class="chip" href="{{ url_for('local_page', key=lot.key, row=r.row) }}">{{ r.designation }}</a>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Suivi Travaux — Projet CAVALLY{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo">CET</span> Suivi Travaux — Projet CAVALLY</div>
+    <nav>
+      <a href="{{ url_for('home') }}" class="{{ 'active' if nav=='home' }}">Tableau de bord</a>
+      <a href="{{ url_for('import_page') }}" class="{{ 'active' if nav=='import' }}">Importer</a>
+      <a href="{{ url_for('export_page') }}" class="{{ 'active' if nav=='export' }}">Exporter</a>
+      <a href="{{ url_for('help_page') }}" class="{{ 'active' if nav=='help' }}">Aide</a>
+    </nav>
+    <div class="user">👤
+      <input id="userName" placeholder="Votre nom" autocomplete="off">
+    </div>
+  </header>
+  <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for cat, msg in messages %}
+          <div class="flash {{ cat }}">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

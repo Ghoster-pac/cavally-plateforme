@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ local.designation }} — {{ lot.label }}{% endblock %}
+{% block content %}
+<p class="sub"><a href="{{ url_for('home') }}">Tableau de bord</a> ·
+  <a href="{{ url_for('lot_page', key=lot.key) }}">{{ lot.label }}</a></p>
+<h1>{{ local.designation }}</h1>
+<p class="sub">Niveau {{ local.niveau }} · {{ lot.label }} — renseignez toutes les tâches de ce local.
+  <span id="saved" class="saved">✓ enregistré</span></p>
+
+<div class="card">
+  <table id="tasks">
+    <thead><tr><th style="min-width:260px">Tâche</th><th style="width:100px">Avancement %</th>
+      <th style="width:170px">Statut</th><th style="min-width:200px">Observation</th></tr></thead>
+    <tbody id="tasksBody"><tr><td colspan="4" class="muted">Chargement…</td></tr></tbody>
+  </table>
+</div>
+
+<h2>Commentaire général du local</h2>
+<div class="card">
+  <textarea id="comment" rows="3" placeholder="Commentaire global sur ce local…"></textarea>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const LOT_KEY = {{ lot.key|tojson }};
+const ROW = {{ local.row }};
+const STATUSES = {{ statuses|tojson }};
+const savedEl = document.getElementById("saved");
+const saver = Cav.saver(() => { savedEl.classList.add("show"); setTimeout(()=>savedEl.classList.remove("show"),1200); });
+
+function render(tasks){
+  const tb = document.getElementById("tasksBody");
+  tb.innerHTML = "";
+  tasks.forEach(t => {
+    const av100 = (t.av === "" || t.av === null || t.av === undefined) ? "" : (parseFloat(t.av)*100);
+    const tr = document.createElement("tr");
+    tr.dataset.task = t.id;
+    tr.innerHTML = `
+      <td>${Cav.esc(t.label)}</td>
+      <td><input class="av" type="number" min="0" max="100" step="5" value="${av100}" style="width:80px;text-align:right"></td>
+      <td><select class="st">${STATUSES.map(s=>`<option ${s===t.st?'selected':''}>${Cav.esc(s)}</option>`).join("")}</select></td>
+      <td><input class="obs" type="text" value="${Cav.esc(t.obs)}" placeholder="observation…"></td>`;
+    tb.appendChild(tr);
+  });
+}
+
+document.addEventListener("change", (e) => {
+  const tr = e.target.closest("tr");
+  if (!tr || !tr.dataset.task) return;
+  const task = tr.dataset.task;
+  if (e.target.classList.contains("av")) {
+    const v = e.target.value.trim();
+    saver.push(`${LOT_KEY}|${ROW}|${task}|av`, {lot:LOT_KEY,row:ROW,task,field:"av",value:v===""?"":parseFloat(v)/100});
+  } else if (e.target.classList.contains("st")) {
+    saver.push(`${LOT_KEY}|${ROW}|${task}|st`, {lot:LOT_KEY,row:ROW,task,field:"st",value:e.target.value});
+  } else if (e.target.classList.contains("obs")) {
+    saver.push(`${LOT_KEY}|${ROW}|${task}|obs`, {lot:LOT_KEY,row:ROW,task,field:"obs",value:e.target.value});
+  }
+});
+document.getElementById("comment").addEventListener("change", (e) => {
+  saver.push(`${LOT_KEY}|${ROW}|__global__|comment`, {lot:LOT_KEY,row:ROW,task:"__global__",field:"comment",value:e.target.value});
+});
+
+Cav.api(`/api/lot/${LOT_KEY}/local/${ROW}`).then(d => {
+  render(d.tasks);
+  document.getElementById("comment").value = d.comment || "";
+}).catch(e => Cav.toast("Erreur chargement : " + e.message, "err"));
+</script>
+{% endblock %}
