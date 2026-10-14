@@ -81,6 +81,18 @@ Fichiers concernés : `static/manifest.webmanifest` (manifeste),
 `static/sw.js` (service worker : cache de l'interface et des dernières données),
 `static/app.js` (file d'attente et synchronisation).
 
+### Applications natives (Android, iPhone, Windows)
+
+En plus de la PWA, le dépôt contient de **vraies applications installables** :
+
+- **Android** → fichier `.apk`
+- **iPhone / iPad** → fichier `.ipa`
+- **Windows** → installateur `.exe`, paquet `.msi`, version portable
+
+Elles se compilent **gratuitement via GitHub Actions** (onglet *Actions* du
+dépôt), sans installer d'outil. Guide complet :
+**[APPS_MOBILE_BUREAU.md](APPS_MOBILE_BUREAU.md)**.
+
 ## Déploiement en ligne
 
 > **Recommandé pour un hébergement 100 % gratuit et durable :**

@@ -1,0 +1,19 @@
+{
+  "appId": "com.cet.cavally",
+  "appName": "CAVALLY",
+  "webDir": "www",
+  "server": {
+    "url": "https://GhosterPacman.pythonanywhere.com",
+    "androidScheme": "https",
+    "iosScheme": "https",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0b6b6f"
+  },
+  "ios": {
+    "contentInset": "always",
+    "backgroundColor": "#0b6b6f"
+  }
+}

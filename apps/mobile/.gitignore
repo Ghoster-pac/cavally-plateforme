@@ -1,0 +1,23 @@
+# Dépendances
+node_modules/
+
+# Android
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/app/release/
+android/app/debug/
+*.keystore
+*.jks
+
+# iOS
+ios/App/build/
+ios/App/Pods/
+ios/App/*.xcworkspace/xcuserdata/
+ios/App/*.xcodeproj/xcuserdata/
+ios/App/output/
+*.ipa
+
+# Divers
+.DS_Store

@@ -1,0 +1,59 @@
+{
+  "name": "cavally-desktop",
+  "version": "1.0.0",
+  "description": "Logiciel de bureau CAVALLY (Windows / macOS / Linux) — coque native autour de la plateforme de suivi.",
+  "private": true,
+  "main": "main.js",
+  "author": "CET — Projet CAVALLY",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win nsis msi portable",
+    "dist:linux": "electron-builder --linux AppImage deb",
+    "dist:mac": "electron-builder --mac dmg"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.cet.cavally",
+    "productName": "CAVALLY",
+    "copyright": "CET — Projet CAVALLY",
+    "files": [
+      "main.js",
+      "offline.html",
+      "build/icon.png"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "msi", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CAVALLY"
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.productivity",
+      "target": ["dmg"]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Office",
+      "target": ["AppImage", "deb"]
+    }
+  }
+}

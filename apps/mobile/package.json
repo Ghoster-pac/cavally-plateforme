@@ -1,0 +1,22 @@
+{
+  "name": "cavally-mobile",
+  "version": "1.0.0",
+  "description": "Application mobile CAVALLY (Android / iOS) — coque native autour de la plateforme de suivi.",
+  "private": true,
+  "scripts": {
+    "sync": "cap sync",
+    "add:android": "cap add android",
+    "add:ios": "cap add ios",
+    "open:android": "cap open android",
+    "open:ios": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/ios": "^6.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.2.0"
+  }
+}
