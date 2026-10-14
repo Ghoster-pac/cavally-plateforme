@@ -1,37 +1,68 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>CAVALLY — Suivi Travaux</title>
   <meta name="theme-color" content="#0b6b6f">
-  <title>CAVALLY</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="app.css">
+  <link rel="apple-touch-icon" href="assets/icon.png">
   <style>
-    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-      background:#0b6b6f;color:#fff;display:flex;align-items:center;justify-content:center;text-align:center}
-    .box{max-width:320px;padding:24px}
-    .logo{display:inline-block;background:#fff;color:#0b6b6f;font-weight:800;letter-spacing:.5px;
-      border-radius:12px;padding:8px 14px;font-size:22px;margin-bottom:16px}
-    p{opacity:.9;line-height:1.5;font-size:14px}
-    a.btn{display:inline-block;margin-top:14px;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.5);
-      color:#fff;text-decoration:none;padding:10px 18px;border-radius:10px;font-weight:700}
+    .netstatus { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; border:1px solid var(--border); color:var(--muted); }
+    .netstatus.on { background:var(--primary-soft); color:var(--primary); border-color:#bfe6e4; }
+    .netstatus.off { background:#fef3c7; color:#92400e; border-color:#fde68a; }
+    .netstatus.sync { background:#eff6ff; color:#1e40af; border-color:#bfdbfe; }
+    .offlinebar { background:#f59e0b; color:#fff; padding:6px 12px; font-size:13px; text-align:center; font-weight:600; }
+    .saved { opacity:0; margin-left:8px; color:#16a34a; font-size:13px; font-weight:600; transition:opacity .2s; }
+    .saved.show { opacity:1; }
+    .sticky-col { position:sticky; left:0; background:var(--card); z-index:5; }
+    .field-av input { width:90px; text-align:right; }
+    .field-obs input { width:160px; }
+    .no-label .fld > span { display:none; }
+    .massfill { display:flex; gap:10px; align-items:flex-end; padding:12px; margin-bottom:12px; }
+    .local-link { color:var(--primary); font-weight:600; text-decoration:none; }
+    .local-link:hover { text-decoration:underline; }
+    #view { max-width:1200px; margin:0 auto; padding:16px; }
+    @media (max-width:900px){ #view { padding:12px; } .massfill{ flex-wrap:wrap; } }
   </style>
+  <script>
+    (function(){
+      try {
+        const t = localStorage.getItem('cavally_theme') || 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch(e){}
+    })();
+  </script>
 </head>
 <body>
-  <div class="box">
-    <div class="logo">CAVALLY</div>
-    <p>Suivi des travaux — projet CAVALLY.</p>
-    <p id="msg">Chargement de la plateforme…</p>
-    <a class="btn" id="link" href="https://GhosterPacman.pythonanywhere.com">Ouvrir la plateforme</a>
-  </div>
-  <script>
-    // Page de secours affichée uniquement si l'application n'a pas pu charger la
-    // plateforme distante (aucun réseau au premier lancement par exemple).
-    var URL = "https://GhosterPacman.pythonanywhere.com";
-    document.getElementById("link").setAttribute("href", URL);
-    setTimeout(function () {
-      document.getElementById("msg").textContent =
-        "Hors connexion. Reconnectez-vous puis rouvrez l'application.";
-    }, 4000);
-  </script>
+  <header class="topbar">
+    <button class="navtoggle" id="navToggle" aria-expanded="false" aria-controls="mainNav">☰</button>
+    <a class="brand" href="#/">
+      <span class="logo">CET</span>
+      <span class="brand-txt">Suivi Travaux — Projet CAVALLY</span>
+    </a>
+    <button class="themebtn" id="themeBtn" aria-label="Basculer thème">🌙</button>
+    <nav id="mainNav">
+      <a href="#/" data-nav="home">Tableau de bord</a>
+      <a href="#/import" data-nav="import">Importer</a>
+      <a href="#/export" data-nav="export">Exporter</a>
+      <a href="#/cloud" data-nav="cloud">Sauvegarde</a>
+      <a href="#/help" data-nav="help">Aide</a>
+    </nav>
+    <div class="user">
+      <span id="netStatus" class="netstatus"></span>
+      <span>👤</span>
+      <input id="userName" placeholder="Votre nom">
+    </div>
+  </header>
+  <div id="offlineBar" class="offlinebar" hidden>Hors ligne — les saisies sont sauvegardées sur cet appareil et synchronisées au retour du réseau</div>
+  <main id="view"></main>
+
+  <input type="file" id="importFile" accept=".xlsx,.xlsm" hidden>
+
+  <script src="vendor/jszip.min.js"></script>
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

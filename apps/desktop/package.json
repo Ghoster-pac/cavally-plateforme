@@ -1,7 +1,7 @@
 {
   "name": "cavally-desktop",
   "version": "1.0.0",
-  "description": "Logiciel de bureau CAVALLY (Windows / macOS / Linux) — coque native autour de la plateforme de suivi.",
+  "description": "Logiciel de bureau CAVALLY (Windows / macOS / Linux) — application autonome : saisie, import/export Excel et sauvegarde en ligne.",
   "private": true,
   "main": "main.js",
   "author": "CET — Projet CAVALLY",
@@ -10,6 +10,7 @@
     "url": "https://github.com/Ghoster-pac/cavally-plateforme.git"
   },
   "scripts": {
+    "sync": "node -e \"require('fs').cpSync('../mobile/www','www',{recursive:true})\"",
     "start": "electron .",
     "dist": "electron-builder --publish never",
     "dist:win": "electron-builder --win nsis msi portable --publish never",
@@ -27,7 +28,8 @@
     "files": [
       "main.js",
       "offline.html",
-      "build/icon.png"
+      "build/icon.png",
+      "www/**/*"
     ],
     "directories": {
       "output": "dist",

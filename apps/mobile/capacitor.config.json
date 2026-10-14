@@ -3,7 +3,6 @@
   "appName": "CAVALLY",
   "webDir": "www",
   "server": {
-    "url": "https://GhosterPacman.pythonanywhere.com",
     "androidScheme": "https",
     "iosScheme": "https",
     "cleartext": false

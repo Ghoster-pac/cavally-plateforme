@@ -1,20 +1,64 @@
 /* ===========================================================================
    CAVALLY — application de bureau (Electron)
-   Encapsule la plateforme de suivi dans une vraie fenêtre d'application.
-   Le mode hors-ligne et la synchronisation sont assurés par la plateforme
-   elle-même (service worker + file d'attente locale dans le navigateur).
+   Application AUTONOME : l'interface, les données et l'import/export Excel
+   sont embarqués (dossier « www »). Aucun site web n'est nécessaire.
+   Une sauvegarde en ligne (Supabase) est faite automatiquement par
+   l'application lorsqu'un réseau est disponible.
    =========================================================================== */
 const { app, BrowserWindow, Menu, shell } = require("electron");
 const path = require("path");
+const fs = require("fs");
+const http = require("http");
 
-// URL de la plateforme (modifiable via la variable d'environnement CAVALLY_URL).
-const APP_URL = process.env.CAVALLY_URL || "https://GhosterPacman.pythonanywhere.com";
-let APP_HOST = "";
-try { APP_HOST = new URL(APP_URL).host; } catch (e) { APP_HOST = ""; }
+// Si CAVALLY_URL est défini, on charge cette adresse (mode « site en ligne »).
+const REMOTE_URL = process.env.CAVALLY_URL || "";
+
+const WWW_DIR = path.join(__dirname, "www");
+
+const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "application/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".svg": "image/svg+xml",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".ico": "image/x-icon",
+};
+
+// Petit serveur local : sert le dossier « www » (indispensable pour que
+// fetch() et le service worker fonctionnent comme dans un navigateur).
+function startServer() {
+  return new Promise((resolve) => {
+    const server = http.createServer((req, res) => {
+      let rel = decodeURIComponent(req.url.split("?")[0]);
+      if (rel === "/" || rel === "") rel = "/index.html";
+      const full = path.join(WWW_DIR, path.normalize(rel).replace(/^(\.\.[/\\])+/, ""));
+      if (!full.startsWith(WWW_DIR)) { res.writeHead(403); res.end(); return; }
+      fs.readFile(full, (err, data) => {
+        if (err) { res.writeHead(404); res.end("Introuvable"); return; }
+        res.writeHead(200, { "Content-Type": MIME[path.extname(full).toLowerCase()] || "application/octet-stream" });
+        res.end(data);
+      });
+    });
+    server.listen(0, "127.0.0.1", () => resolve(server));
+  });
+}
 
 let mainWindow = null;
+let localServer = null;
 
-function createWindow() {
+async function createWindow() {
+  let target;
+  if (REMOTE_URL) {
+    target = REMOTE_URL;
+  } else {
+    localServer = await startServer();
+    target = "http://127.0.0.1:" + localServer.address().port + "/index.html";
+  }
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 860,
@@ -32,60 +76,45 @@ function createWindow() {
 
   // Les liens externes s'ouvrent dans le navigateur par défaut.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith(APP_URL) || (APP_HOST && url.includes(APP_HOST))) {
-      return { action: "allow" };
-    }
     shell.openExternal(url);
     return { action: "deny" };
   });
 
-  // Si la plateforme distante est injoignable (hors-ligne au 1er lancement),
-  // on affiche une page locale explicative.
-  mainWindow.loadURL(APP_URL).catch(() => {
+  mainWindow.loadURL(target).catch(() => {
     mainWindow.loadFile("offline.html").catch(() => {});
   });
 }
 
 function buildMenu() {
   const template = [
-    {
-      label: "Fichier",
-      submenu: [{ role: "quit", label: "Quitter" }],
-    },
+    { label: "Fichier", submenu: [{ role: "quit", label: "Quitter" }] },
     {
       label: "Édition",
       submenu: [
-        { role: "undo", label: "Annuler" },
-        { role: "redo", label: "Rétablir" },
+        { role: "undo", label: "Annuler" }, { role: "redo", label: "Rétablir" },
         { type: "separator" },
-        { role: "cut", label: "Couper" },
-        { role: "copy", label: "Copier" },
-        { role: "paste", label: "Coller" },
-        { role: "selectAll", label: "Tout sélectionner" },
+        { role: "cut", label: "Couper" }, { role: "copy", label: "Copier" },
+        { role: "paste", label: "Coller" }, { role: "selectAll", label: "Tout sélectionner" },
       ],
     },
     {
       label: "Affichage",
       submenu: [
-        { role: "reload", label: "Recharger" },
-        { role: "resetZoom", label: "Zoom normal" },
-        { role: "zoomIn", label: "Agrandir" },
-        { role: "zoomOut", label: "Réduire" },
-        { type: "separator" },
-        { role: "togglefullscreen", label: "Plein écran" },
+        { role: "reload", label: "Recharger" }, { role: "resetZoom", label: "Zoom normal" },
+        { role: "zoomIn", label: "Agrandir" }, { role: "zoomOut", label: "Réduire" },
+        { type: "separator" }, { role: "togglefullscreen", label: "Plein écran" },
       ],
     },
     {
       label: "Aide",
-      submenu: [
-        { label: "Ouvrir dans le navigateur", click: () => shell.openExternal(APP_URL) },
-      ],
+      submenu: REMOTE_URL
+        ? [{ label: "Ouvrir dans le navigateur", click: () => shell.openExternal(REMOTE_URL) }]
+        : [{ label: "Application autonome (hors-ligne)", enabled: false }],
     },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-// Une seule instance à la fois.
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
@@ -97,13 +126,15 @@ if (!gotLock) {
     }
   });
 
-  app.whenReady().then(() => {
-    createWindow();
+  app.whenReady().then(async () => {
+    await createWindow();
     buildMenu();
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
   });
+
+  app.on("will-quit", () => { if (localServer) localServer.close(); });
 }
 
 app.on("window-all-closed", () => {

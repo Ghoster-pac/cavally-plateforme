@@ -1,0 +1,13 @@
+{
+  "name": "CAVALLY - Suivi Travaux",
+  "short_name": "CAVALLY",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b6b6f",
+  "theme_color": "#0b6b6f",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "assets/icon.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/icon.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

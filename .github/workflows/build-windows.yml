@@ -10,6 +10,7 @@ on:
   push:
     paths:
       - "apps/desktop/**"
+      - "apps/mobile/www/**"
       - ".github/workflows/build-windows.yml"
 
 jobs:
@@ -28,6 +29,10 @@ jobs:
       - name: Dépendances
         working-directory: apps/desktop
         run: npm ci || npm install
+
+      - name: Intégrer l'application embarquée (www)
+        working-directory: apps/desktop
+        run: node -e "require('fs').cpSync('../mobile/www','www',{recursive:true})"
 
       - name: Construire l'installateur (.exe, .msi, portable)
         working-directory: apps/desktop

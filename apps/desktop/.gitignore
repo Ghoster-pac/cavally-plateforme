@@ -1,5 +1,7 @@
 node_modules/
 dist/
 out/
+# copie de l'application embarquée (générée au build depuis ../mobile/www)
+www/
 *.log
 .DS_Store
