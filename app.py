@@ -194,13 +194,32 @@ def api_add_local(key):
         return jsonify({"error": str(exc)}), 400
 
 
-@app.route("/api/lot/<key>/local/<int:row>", methods=["DELETE"])
-def api_del_local(key, row):
+@app.route("/api/lot/<key>/local/<int:row>", methods=["PUT"])
+def api_edit_local(key, row):
+    body = request.get_json(force=True, silent=True) or {}
+    designation = (body.get("designation") or "").strip()
+    niveau = (body.get("niveau") or "").strip() or None
+    if not designation:
+        return jsonify({"error": "designation requise"}), 400
     try:
-        db.delete_custom_local(key, row)
+        db.edit_local(key, row, designation, niveau, body.get("user") or "Anonyme")
         return jsonify({"ok": True})
     except Exception as exc:  # noqa
         return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/lot/<key>/local/<int:row>", methods=["DELETE"])
+def api_del_local(key, row):
+    body = request.get_json(force=True, silent=True) or {}
+    try:
+        db.delete_custom_local(key, row, body.get("user") or "Anonyme")
+        return jsonify({"ok": True})
+    except Exception as exc:  # noqa
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/save", methods=["POST"])
+def api_save():
     body = request.get_json(force=True, silent=True) or {}
     updates = body.get("updates") or []
     if not updates:

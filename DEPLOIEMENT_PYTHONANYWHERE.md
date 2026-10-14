@@ -107,7 +107,26 @@ cd ~/cavally-plateforme
 git pull
 ```
 
-Puis clique sur **Reload** dans l'onglet Web.
+Puis clique sur **Reload** dans l'onglet Web. La base de données et les locaux
+ajoutés sont conservés.
+
+## Mettre à jour une application déjà en ligne (PythonAnywhere)
+
+1. Ouvre une console **Bash** (Dashboard → Consoles → Bash).
+2. Récupère la dernière version :
+
+   ```bash
+   cd ~/cavally-plateforme
+   git pull
+   ```
+
+   (Si tu n'utilises pas Git : téléverse le nouveau `cavally-plateforme.zip` via
+   **Files**, puis `cd ~ && unzip -o cavally-plateforme.zip`.)
+3. Onglet **Web** → bouton vert **Reload**.
+4. Rafraîchis la page de l'app (Ctrl+F5).
+
+> Les données (saisies, locaux ajoutés/supprimés) restent intactes : elles sont
+> dans la base `data/cavally.db`, pas dans le code.
 
 ## Sauvegarder / restaurer les données
 

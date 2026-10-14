@@ -56,14 +56,28 @@ def lot_by_key(structure: dict, key: str, include_custom: bool = True):
             if include_custom:
                 try:
                     custom = get_custom_locals(key)
-                    existing_rows = {r["row"] for r in lot["rows"]}
+                    deleted = get_deleted_rows(key)
+                    existing = {r["row"]: r for r in lot["rows"]}
+                    # applique les modifications (désignation/niveau) aux lignes existantes
                     for c in custom:
-                        if c["row_num"] not in existing_rows:
+                        if c["row_num"] in existing:
+                            existing[c["row_num"]]["designation"] = (
+                                c.get("designation") or existing[c["row_num"]]["designation"])
+                            if c.get("niveau"):
+                                existing[c["row_num"]]["niveau"] = c["niveau"]
+                    # retire les locaux masqués/supprimés
+                    if deleted:
+                        lot["rows"] = [r for r in lot["rows"] if r["row"] not in deleted]
+                    # ajoute les locaux personnalisés (nouveaux numéros)
+                    existing2 = {r["row"] for r in lot["rows"]}
+                    for c in custom:
+                        if c["row_num"] not in existing2 and c["row_num"] not in deleted:
                             lot["rows"].append({
                                 "row": c["row_num"],
                                 "niveau": c.get("niveau") or "",
                                 "designation": c.get("designation") or f"LOCAL {c['row_num']}",
                             })
+                    lot["rows"].sort(key=lambda r: r["row"])
                 except Exception:
                     pass
             return lot
@@ -127,6 +141,13 @@ def init_db(force_seed: bool = False):
             niveau TEXT,
             created_by TEXT,
             created_at TEXT,
+            PRIMARY KEY (lot, row_num)
+        );
+        CREATE TABLE IF NOT EXISTS deleted_locals (
+            lot TEXT NOT NULL,
+            row_num INTEGER NOT NULL,
+            deleted_by TEXT,
+            deleted_at TEXT,
             PRIMARY KEY (lot, row_num)
         );
         """
@@ -427,6 +448,15 @@ def get_custom_locals(lot_key: str):
     return [dict(x) for x in rows]
 
 
+def get_deleted_rows(lot_key: str):
+    con = connect()
+    rows = con.execute(
+        "SELECT row_num FROM deleted_locals WHERE lot=?", (lot_key,)
+    ).fetchall()
+    con.close()
+    return {x["row_num"] for x in rows}
+
+
 def add_custom_local(lot_key: str, designation: str, niveau: str | None, user: str):
     st = get_structure()
     lot = lot_by_key(st, lot_key)
@@ -460,26 +490,68 @@ def add_custom_local(lot_key: str, designation: str, niveau: str | None, user: s
         )
         con.commit()
         created = row_num
-    # rafraîchir structure cache pour refléter nouvelles lignes
-    try:
-        os.remove(STRUCTURE_PATH)
-    except OSError:
-        pass
+    # rafraîchir le cache de structure (les locaux viennent de la base)
+    global _STRUCT
+    _STRUCT = None
+    con.close()
+    return created
+
+
+def edit_local(lot_key: str, row_num: int, designation: str, niveau: str | None, user: str):
+    con = connect()
+    exists = con.execute(
+        "SELECT 1 FROM custom_locals WHERE lot=? AND row_num=?", (lot_key, row_num)
+    ).fetchone()
+    if exists:
+        con.execute(
+            "UPDATE custom_locals SET designation=?, niveau=? WHERE lot=? AND row_num=?",
+            (designation, niveau or "", lot_key, row_num),
+        )
+    else:
+        con.execute(
+            "INSERT INTO custom_locals(lot,row_num,designation,niveau,created_by,created_at) "
+            "VALUES(?,?,?,?,?,?)",
+            (lot_key, row_num, designation, niveau or "", user, now_iso()),
+        )
+    con.execute("DELETE FROM deleted_locals WHERE lot=? AND row_num=?", (lot_key, row_num))
+    con.commit()
+    con.close()
     global _STRUCT
     _STRUCT = None
 
 
-def delete_custom_local(lot_key: str, row_num: int):
+def delete_custom_local(lot_key: str, row_num: int, user: str = "Anonyme"):
     con = connect()
     # supprimer les saisies associées
     con.execute("DELETE FROM entries WHERE lot=? AND row=?", (lot_key, row_num))
     con.execute("DELETE FROM edits WHERE lot=? AND row=?", (lot_key, row_num))
-    con.execute("DELETE FROM custom_locals WHERE lot=? AND row_num=?", (lot_key, row_num))
+    custom = con.execute(
+        "SELECT 1 FROM custom_locals WHERE lot=? AND row_num=?", (lot_key, row_num)
+    ).fetchone()
+    if custom:
+        con.execute("DELETE FROM custom_locals WHERE lot=? AND row_num=?", (lot_key, row_num))
+    else:
+        # ligne d'origine : on la masque (on ne peut pas retirer une ligne du gabarit Excel)
+        con.execute(
+            "INSERT OR REPLACE INTO deleted_locals(lot,row_num,deleted_by,deleted_at) VALUES(?,?,?,?)",
+            (lot_key, row_num, user, now_iso()),
+        )
     con.commit()
-    try:
-        os.remove(STRUCTURE_PATH)
-    except OSError:
-        pass
+    con.close()
+    global _STRUCT
+    _STRUCT = None
+
+
+def forgot(seed_clear: bool = False):
+    con = connect()
+    if seed_clear:
+        con.execute("DELETE FROM entries")
+        con.execute("DELETE FROM custom_locals")
+        con.execute("DELETE FROM deleted_locals")
+        con.commit()
+    seed(con, clear=seed_clear)
+    con.commit()
+    con.close()
     global _STRUCT
     _STRUCT = None
 

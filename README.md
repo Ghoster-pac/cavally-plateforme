@@ -44,8 +44,12 @@ Au premier lancement, la base `data/cavally.db` est créée et initialisée à p
 3. **Saisie par tâche** (recommandé) : un lot → une tâche → la liste des locaux.
    Le « remplissage groupé » applique une valeur/statut à toutes les lignes affichées (filtrées par niveau).
 4. **Saisie par local** : toutes les tâches d'un local + commentaire général.
-5. **Importer** : déposez un classeur rempli pour fusionner.
-6. **Exporter** : téléchargez le classeur complet, prêt à diffuser.
+5. **Gérer les locaux** : sur la page d'un lot, ajoutez un **local personnalisé**
+   (désignation + niveau) ; sur la page d'un local, **modifiez** sa désignation/son
+   niveau ou **supprimez-le** (les locaux d'origine sont masqués, pas effacés du
+   modèle Excel).
+6. **Importer** : déposez un classeur rempli pour fusionner.
+7. **Exporter** : téléchargez le classeur complet, prêt à diffuser.
 
 Les champs sont enregistrés automatiquement (≈ 0,5 s après la dernière frappe).
 
