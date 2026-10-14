@@ -10,6 +10,7 @@ from flask import (Flask, jsonify, render_template, request, send_file,
                    send_from_directory, redirect, url_for, flash)
 
 import db
+import cloud
 import excel_engine as E
 
 app = Flask(__name__)
@@ -146,6 +147,21 @@ def help_page():
     return render_template("help.html", nav="help")
 
 
+@app.route("/sauvegarde")
+def cloud_page():
+    try:
+        info = cloud.cloud_status()
+    except Exception as exc:  # noqa
+        info = cloud.status()
+        info["error"] = str(exc)
+    backups = []
+    try:
+        backups = cloud.recent_backups(10)
+    except Exception:  # noqa
+        pass
+    return render_template("sauvegarde.html", info=info, backups=backups, nav="cloud")
+
+
 # ---------------------------------------------------------------------------
 # API
 # ---------------------------------------------------------------------------
@@ -256,6 +272,34 @@ def api_reset():
         return jsonify({"error": "confirmation requise"}), 400
     db.forgot(seed_clear=True)
     return jsonify({"ok": True})
+
+
+# ---------------------------------------------------------------------------
+# Sauvegarde en ligne (Supabase)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/cloud/status")
+def api_cloud_status():
+    try:
+        return jsonify(cloud.cloud_status())
+    except Exception as exc:  # noqa
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/cloud/push", methods=["POST"])
+def api_cloud_push():
+    res = cloud.full_push()
+    return jsonify(res), (200 if res.get("ok") else 502)
+
+
+@app.route("/api/cloud/restore", methods=["POST"])
+def api_cloud_restore():
+    body = request.get_json(force=True, silent=True) or {}
+    mode = body.get("mode") or "replace"
+    if mode == "replace" and body.get("confirm") != "RESTORE":
+        return jsonify({"error": "confirmation requise (RESTORE)"}), 400
+    res = cloud.restore(mode=mode)
+    return jsonify(res), (200 if res.get("ok") else 502)
 
 
 if __name__ == "__main__":

@@ -135,11 +135,14 @@ Variables d'environnement utiles :
 ```
 app.py              application Flask (pages + API)
 db.py               accès SQLite, agrégations, import
+cloud.py            sauvegarde en ligne (miroir Supabase / PostgreSQL)
 excel_engine.py     lecture du modèle, export par patch XML, import
 templates/          interface (Jinja2)
 static/             styles + JavaScript
 files/              modèle Excel de référence
 data/               base de données et structure (générées)
+supabase/schema.sql schéma des tables de sauvegarde en ligne
+scripts/            tâches planifiées (sauvegarde complète)
 ```
 
 ### Pourquoi un « patch XML » pour l'export ?
@@ -153,6 +156,29 @@ retirées pour forcer un recalcul propre à l'ouverture (Excel **et** LibreOffic
 ## Sauvegarde
 
 La base est un simple fichier SQLite : copiez `data/cavally.db` pour sauvegarder.
+
+### Sauvegarde en ligne (Supabase / PostgreSQL) ☁
+
+En plus du fichier local, chaque saisie est recopiée dans une **seconde base en
+ligne** (Supabase). La page **Sauvegarde** de la plateforme permet de :
+
+- voir l'état (dernière sauvegarde, volumes local/en ligne) ;
+- **Sauvegarder maintenant** (copie complète + instantané daté) ;
+- **Restaurer depuis le cloud** (remplacement ou fusion).
+
+Guide de mise en place : **[SAUVEGARDE_SUPABASE.md](SAUVEGARDE_SUPABASE.md)**.
+
+Variables d'environnement :
+
+| Variable | Rôle | Défaut |
+|---|---|---|
+| `SUPABASE_URL` | URL du projet Supabase | projet CAVALLY |
+| `SUPABASE_KEY` | clé publique (« publishable ») | clé CAVALLY |
+| `CAVALLY_CLOUD` | `on` / `off` (désactiver) | `on` |
+| `CAVALLY_CLOUD_TIMEOUT` | délai max d'une requête (s) | `8` |
+
+> La sauvegarde est **best effort** : si le réseau ou Supabase est indisponible,
+> la plateforme continue de fonctionner normalement (elle réessaie plus tard).
 
 ## Remise à zéro
 

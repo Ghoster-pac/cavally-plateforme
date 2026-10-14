@@ -130,11 +130,27 @@ ajoutés sont conservés.
 
 ## Sauvegarder / restaurer les données
 
-- **Sauvegarde** : onglet **Files** → `cavally-plateforme/data/` →
+- **Sauvegarde locale** : onglet **Files** → `cavally-plateforme/data/` →
   télécharge `cavally.db` (c'est toute la base).
 - **Restauration** : renvoie le fichier `cavally.db` au même endroit, puis Reload.
 - **Remise à zéro** : supprime `data/cavally.db` (et `cavally.db-wal`/`-shm`
   s'ils existent) via l'onglet Files, puis Reload → réinitialisation depuis le modèle.
+
+### Sauvegarde en ligne (Supabase) ☁
+
+En plus du fichier local, la plateforme recopie les données dans une base
+Supabase (la seconde base en ligne). Voir le guide complet
+**[SAUVEGARDE_SUPABASE.md](SAUVEGARDE_SUPABASE.md)**.
+
+Sur PythonAnywhere, crée une tâche quotidienne :
+**Dashboard → Tasks** →
+
+```
+python3 /home/VOTRE_UTILISATEUR/cavally-plateforme/scripts/backup_supabase.py
+```
+
+(La copie au fil de l'eau fonctionne sans tâche planifiée ; celle-ci force une
+copie complète régulière.)
 
 ## Réglages utiles (variables d'environnement)
 
@@ -147,6 +163,9 @@ d'autres dans `os.environ.setdefault(...)` :
 | `CAVALLY_SECRET` | clé de session Flask (mets une chaîne aléatoire) |
 | `CAVALLY_DB` | emplacement de la base (par défaut `data/cavally.db`) |
 | `CAVALLY_JOURNAL` | `DELETE` (défaut ici) ou `WAL` |
+| `SUPABASE_URL` | URL du projet Supabase (sauvegarde en ligne) |
+| `SUPABASE_KEY` | clé publique Supabase |
+| `CAVALLY_CLOUD` | `on` (défaut) ou `off` pour désactiver la sauvegarde en ligne |
 
 ## Limites de l'offre gratuite (à connaître)
 

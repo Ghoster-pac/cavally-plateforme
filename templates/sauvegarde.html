@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Sauvegarde en ligne — Suivi CAVALLY{% endblock %}
+{% block content %}
+<h1>Sauvegarde en ligne</h1>
+<p class="sub">Les données saisies sont enregistrées sur le serveur <strong>et</strong> recopiées
+dans une seconde base en ligne (Supabase / PostgreSQL). En cas de perte du serveur, tout peut
+être restauré depuis cette copie.</p>
+
+{% if not info.configured %}
+  <div class="flash error">La sauvegarde en ligne n'est pas configurée (variables SUPABASE_URL / SUPABASE_KEY).</div>
+{% elif not info.enabled %}
+  <div class="flash error">Sauvegarde momentanément suspendue après une erreur réseau : elle reprendra automatiquement.</div>
+{% endif %}
+
+<div class="grid cols-2">
+  <div class="card kpi">
+    <span class="lbl">Dernière sauvegarde réussie</span>
+    <span class="big" id="lastOk">{{ info.last_ok or "—" }}</span>
+    <div class="small muted" id="stateLine">
+      {% if info.last_error and 'PGRST205' in info.last_error %}
+        Tables de sauvegarde absentes : exécutez <code>supabase/schema.sql</code> dans le SQL Editor de Supabase
+        (voir <a href="{{ url_for('help_page') }}">Aide</a> / <code>SAUVEGARDE_SUPABASE.md</code>).
+      {% elif info.last_error %}
+        Dernière erreur : {{ info.last_error }}
+      {% else %}
+        Aucune erreur signalée.
+      {% endif %}
+    </div>
+
+    <table class="small" style="width:100%;border-collapse:collapse;margin-top:14px">
+      <thead>
+        <tr class="muted">
+          <th style="text-align:left;padding:6px 4px">Données</th>
+          <th style="text-align:right;padding:6px 4px">Sur le serveur</th>
+          <th style="text-align:right;padding:6px 4px">En ligne</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Cellules d'avancement</td>
+          <td style="text-align:right">{{ info.local.entries }}</td>
+          <td style="text-align:right">{{ info.cloud.entries if info.cloud.entries is not none else "—" }}</td>
+        </tr>
+        <tr>
+          <td>Locaux ajoutés / modifiés</td>
+          <td style="text-align:right">{{ info.local.custom_locals }}</td>
+          <td style="text-align:right">{{ info.cloud.custom_locals if info.cloud.custom_locals is not none else "—" }}</td>
+        </tr>
+        <tr>
+          <td>Locaux masqués</td>
+          <td style="text-align:right">{{ info.local.deleted_locals }}</td>
+          <td style="text-align:right">{{ info.cloud.deleted_locals if info.cloud.deleted_locals is not none else "—" }}</td>
+        </tr>
+      </table>
+
+    <div style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn primary" id="btnPush" type="button">☁ Sauvegarder maintenant</button>
+      <button class="btn ghost" id="btnRefresh" type="button">↻ Actualiser l'état</button>
+    </div>
+    <p class="small muted" style="margin-top:10px">La sauvegarde automatique recopie chaque saisie
+      au fil de l'eau. Ce bouton force une copie complète (recommandé une fois par jour).</p>
+  </div>
+
+  <div class="card">
+    <strong>Restaurer depuis le cloud</strong>
+    <p class="small muted">Reconstruit les données du serveur à partir de la copie en ligne.
+      À utiliser en cas de perte ou de remise à niveau.</p>
+    <label class="small muted">Mode</label>
+    <select id="restoreMode">
+      <option value="replace">Remplacer (le serveur devient la copie en ligne)</option>
+      <option value="merge">Fusionner (ajoute / met à jour, ne supprime rien)</option>
+    </select>
+    <div style="margin-top:14px">
+      <button class="btn danger" id="btnRestore" type="button">⟲ Restaurer depuis le cloud</button>
+    </div>
+    <p class="small muted" style="margin-top:10px">En mode « Remplacer », il faut saisir
+      <code>RESTORE</code> pour confirmer.</p>
+    <hr>
+    <strong>Instantanes (copies datées)</strong>
+    <div id="backups">
+      {% if backups %}
+      <table class="small" style="width:100%">
+        <tr class="lbl"><th align="left">Date</th><th align="right">Cellules</th></tr>
+        {% for b in backups %}
+        <tr><td>{{ b.created_at }}</td><td align="right">{{ b.nb_entries }}</td></tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <p class="small muted">Aucun instantané pour l'instant.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-top:16px">
+  <strong>Réglages</strong>
+  <p class="small muted">Base en ligne : <code>{{ info.url }}</code></p>
+  <p class="small muted">Pour repartir de zéro sur un autre projet Supabase : exécuter le script
+    <code>supabase/schema.sql</code> dans l'éditeur SQL de Supabase, puis définir les variables
+    d'environnement <code>SUPABASE_URL</code> et <code>SUPABASE_KEY</code> avant de démarrer la plateforme.</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.getElementById("btnRefresh").addEventListener("click", async () => {
+    try { await Cav.api("/api/cloud/status"); } catch (e) {}
+    location.reload();
+  });
+
+  document.getElementById("btnPush").addEventListener("click", async () => {
+    const btn = document.getElementById("btnPush");
+    const old = btn.textContent;
+    btn.disabled = true; btn.textContent = "Sauvegarde en cours…";
+    try {
+      const r = await Cav.api("/api/cloud/push", { method: "POST", json: {} });
+      Cav.toast("Sauvegardé : " + r.entries + " cellules", "ok");
+      setTimeout(() => location.reload(), 900);
+    } catch (e) {
+      Cav.toast("Échec de la sauvegarde : " + e.message, "error");
+      btn.disabled = false; btn.textContent = old;
+    }
+  });
+
+  document.getElementById("btnRestore").addEventListener("click", async () => {
+    const mode = document.getElementById("restoreMode").value;
+    let confirm = undefined;
+    if (mode === "replace") {
+      const v = prompt("Cette opération va REMPLACER toutes les données du serveur par la copie en ligne.\n\nSaisissez RESTORE pour confirmer :");
+      if (v === null) return;
+      confirm = v.trim();
+      if (confirm !== "RESTORE") { Cav.toast("Confirmation incorrecte", "error"); return; }
+    }
+    const btn = document.getElementById("btnRestore");
+    btn.disabled = true; btn.textContent = "Restauration…";
+    try {
+      await Cav.api("/api/cloud/restore", { method: "POST", json: { mode: mode, confirm: confirm } });
+      Cav.toast("Restauré (" + mode + ")", "ok");
+      setTimeout(() => location.href = "/", 900);
+    } catch (e) {
+      Cav.toast("Échec de la restauration : " + e.message, "error");
+      btn.disabled = false; btn.textContent = "⟲ Restaurer depuis le cloud";
+    }
+  });
+</script>
+{% endblock %}
