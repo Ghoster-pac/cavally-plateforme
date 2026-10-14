@@ -1,52 +1,53 @@
 {% extends "base.html" %}
 {% block title %}{{ task.label }} — {{ lot.label }}{% endblock %}
 {% block content %}
-<p class="sub"><a href="{{ url_for('home') }}">Tableau de bord</a> ·
+<p class="crumbs"><a href="{{ url_for('home') }}">Tableau de bord</a> ›
   <a href="{{ url_for('lot_page', key=lot.key) }}">{{ lot.label }}</a></p>
 <h1>{{ lot.label }} — <span style="color:var(--primary)">{{ task.label }}</span></h1>
-<p class="sub">Saisie rapide : renseignez l'avancement (0–100 %), le statut et une observation pour chaque local.
+<p class="sub">Renseignez l'avancement (0–100 %), le statut et une observation pour chaque local.
   <span id="saved" class="saved">✓ enregistré</span></p>
 
-<div class="toolbar">
-  <div>
-    <label class="small muted">Niveau</label><br>
-    <select id="fNiveau" style="min-width:150px">
-      <option value="">Tous les niveaux</option>
-      {% for lv in lot.levels %}<option value="{{ lv }}">{{ lv }}</option>{% endfor %}
-    </select>
-  </div>
-  <div>
-    <label class="small muted">Recherche</label><br>
-    <input id="fSearch" type="text" placeholder="Nom du local…" style="min-width:200px">
-  </div>
-  <div class="grow"></div>
-  <div>
-    <label class="small muted">Tâche</label><br>
-    <select id="fTask" style="min-width:220px">
-      {% for t in lot.tasks %}<option value="{{ t.id }}" {{ 'selected' if t.id==task.id }}>{{ t.label }}</option>{% endfor %}
-    </select>
+<div class="filters">
+  <div class="toolbar">
+    <label class="fld" style="min-width:160px"><span>Niveau</span>
+      <select id="fNiveau">
+        <option value="">Tous les niveaux</option>
+        {% for lv in lot.levels %}<option value="{{ lv }}">{{ lv }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="fld grow"><span>Recherche</span>
+      <input id="fSearch" type="search" placeholder="Nom du local…">
+    </label>
+    <label class="fld" style="min-width:220px"><span>Tâche</span>
+      <select id="fTask">
+        {% for t in lot.tasks %}<option value="{{ t.id }}" {{ 'selected' if t.id==task.id }}>{{ t.label }}</option>{% endfor %}
+      </select>
+    </label>
   </div>
 </div>
 
-<div class="card" style="margin-bottom:14px">
+<div class="massfill">
   <strong class="small">Remplissage groupé</strong> — appliquer aux lignes affichées :
-  <div class="toolbar" style="margin:10px 0 0">
-    <div><label class="small muted">Avancement %</label><br><input id="massAv" type="number" min="0" max="100" step="5" style="width:90px"></div>
-    <div><label class="small muted">Statut</label><br>
-      <select id="massSt" style="width:160px"><option value="">(ne pas changer)</option>
-        {% for s in statuses %}<option>{{ s }}</option>{% endfor %}</select></div>
-    <div><label class="small muted">&nbsp;</label><br><button class="btn primary" id="applyMass">Appliquer aux lignes affichées</button></div>
-    <div class="small muted" id="massCount"></div>
+  <div class="toolbar" style="margin-top:12px">
+    <label class="fld" style="width:110px"><span>Avancement %</span>
+      <input id="massAv" type="number" min="0" max="100" step="5">
+    </label>
+    <label class="fld" style="min-width:170px"><span>Statut</span>
+      <select id="massSt"><option value="">(ne pas changer)</option>
+        {% for s in statuses %}<option>{{ s }}</option>{% endfor %}</select>
+    </label>
+    <div style="align-self:flex-end"><button class="btn primary" id="applyMass">Appliquer aux lignes affichées</button></div>
+    <div class="small muted" id="massCount" style="align-self:flex-end"></div>
   </div>
 </div>
 
 <div class="tablewrap">
-  <table id="grid">
+  <table id="grid" class="tbl-cards">
     <thead>
       <tr>
         <th class="sticky-col" style="min-width:80px">Niveau</th>
         <th style="min-width:260px">Désignation</th>
-        <th style="width:100px">Avancement %</th>
+        <th style="width:110px">Avancement %</th>
         <th style="width:170px">Statut</th>
         <th style="min-width:220px">Observation</th>
       </tr>
@@ -72,12 +73,12 @@ function rowEl(r){
   tr.dataset.designation = r.designation;
   const av100 = (r.av === "" || r.av === null || r.av === undefined) ? "" : (parseFloat(r.av)*100);
   tr.innerHTML = `
-    <td class="sticky-col nowrap">${Cav.esc(r.niveau)}</td>
-    <td>${Cav.esc(r.designation)}
-      <div class="small"><a href="/lot/${LOT_KEY}/local/${r.row}">voir toutes les tâches →</a></div></td>
-    <td><input class="field-av av" type="number" min="0" max="100" step="5" value="${av100}"></td>
-    <td><select class="st">${STATUSES.map(s=>`<option ${s===r.st?'selected':''}>${Cav.esc(s)}</option>`).join("")}</select></td>
-    <td><input class="field-obs obs" type="text" value="${Cav.esc(r.obs)}" placeholder="observation…"></td>`;
+    <td class="sticky-col nowrap" data-label="Niveau">${Cav.esc(r.niveau)}</td>
+    <td data-label="Désignation">${Cav.esc(r.designation)}
+      <span class="small local-link"><a href="/lot/${LOT_KEY}/local/${r.row}">voir toutes les tâches →</a></span></td>
+    <td data-label="Avancement %"><input class="field-av av" type="number" min="0" max="100" step="5" value="${av100}"></td>
+    <td data-label="Statut"><select class="st">${STATUSES.map(s=>`<option ${s===r.st?'selected':''}>${Cav.esc(s)}</option>`).join("")}</select></td>
+    <td data-label="Observation"><input class="field-obs obs" type="text" value="${Cav.esc(r.obs)}" placeholder="observation…"></td>`;
   return tr;
 }
 

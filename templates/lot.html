@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ lot.label }} — Suivi CAVALLY{% endblock %}
 {% block content %}
-<p class="sub"><a href="{{ url_for('home') }}">← Tableau de bord</a></p>
+<p class="crumbs"><a href="{{ url_for('home') }}">← Tableau de bord</a></p>
 <h1>{{ lot.label }}</h1>
 <p class="sub">{{ lot.rows|length }} locaux · {{ lot.tasks|length }} tâches · Avancement moyen
   <strong>{{ (lot_sum.avancement*100)|round(1) }} %</strong></p>
@@ -12,52 +12,69 @@
 </div>
 
 <h2>Avancement par niveau</h2>
-<div class="grid cols-2">
+<div class="grid cols-3">
   {% for lv in lot_sum.levels %}
-  <div class="card">
-    <div style="display:flex;justify-content:space-between">
-      <strong>{{ lv.niveau }}</strong><span>{{ (lv.moyenne*100)|round(1) }} %</span>
+  <div class="card tight">
+    <div class="section-head">
+      <strong>{{ lv.niveau }}</strong><span class="nowrap">{{ (lv.moyenne*100)|round(1) }} %</span>
     </div>
-    <div class="bar" style="margin-top:6px"><span style="width: {{ (lv.moyenne*100)|round(1) }}%"></span></div>
-    <span class="small muted">{{ lv.total }} local(aux) renseigné(s)</span>
+    <div class="bar" style="margin:8px 0 6px"><span style="width: {{ (lv.moyenne*100)|round(1) }}%"></span></div>
+    <span class="small muted">{{ lv.total }} local(aux)</span>
   </div>
   {% endfor %}
 </div>
 
 <h2>Tâches du lot</h2>
 <div class="card">
-  <table>
+  <table class="tbl-cards">
     <thead><tr><th>Tâche</th><th class="right">Avancement moyen</th><th class="right">Renseigné</th><th></th></tr></thead>
     <tbody>
     {% for t in lot_sum.tasks %}
       <tr>
-        <td>{{ t.label }}</td>
-        <td class="right nowrap">{{ (t.moyenne*100)|round(1) }} %</td>
-        <td class="right muted">{{ t.saisis }}/{{ t.total }}</td>
-        <td class="right"><a class="btn mini" href="{{ url_for('task_page', key=lot.key, task_id=t.id) }}">Saisir</a></td>
+        <td data-label="Tâche">{{ t.label }}</td>
+        <td class="right nowrap" data-label="Avancement moyen">{{ (t.moyenne*100)|round(1) }} %</td>
+        <td class="right muted" data-label="Renseigné">{{ t.saisis }}/{{ t.total }}</td>
+        <td class="right no-label"><a class="btn mini" href="{{ url_for('task_page', key=lot.key, task_id=t.id) }}">Saisir</a></td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
 
+<h2>Ajouter un local</h2>
 <div class="card">
-  <strong>Ajouter un local personnalisé</strong>
-  <div class="toolbar" style="margin-top:8px;align-items:flex-end">
-    <label style="display:flex;flex-direction:column;gap:4px;min-width:240px">Désignation
-      <input id="newDesig" type="text" placeholder="Ex. Garage, Local annexe...">
+  <div class="toolbar">
+    <label class="fld grow"><span>Désignation</span>
+      <input id="newDesig" type="text" placeholder="Ex. Garage, Local annexe…">
     </label>
-    <label style="display:flex;flex-direction:column;gap:4px;min-width:160px">Niveau
-      <input id="newNiv" type="text" list="nivList" placeholder="RDC, R+1...">
+    <label class="fld" style="min-width:160px"><span>Niveau</span>
+      <input id="newNiv" type="text" list="nivList" placeholder="RDC, R+1…">
       <datalist id="nivList">
         {% for lv in lot.levels %}<option value="{{ lv }}">{% endfor %}
       </datalist>
     </label>
-    <button class="btn primary" id="addLocal">Ajouter</button>
-    <span class="muted small">Le numéro est attribué automatiquement (à la suite)</span>
+    <div style="align-self:flex-end"><button class="btn primary" id="addLocal">Ajouter</button></div>
   </div>
+  <div class="small muted">Le numéro de ligne est attribué automatiquement, à la suite des locaux existants.</div>
+  <div id="addErr" class="small" style="color:var(--bad);margin-top:8px;display:none"></div>
 </div>
 
+<h2>Locaux du lot</h2>
+{% for lvl in lot.levels %}
+<div class="card" style="margin-bottom:12px">
+  <div class="section-head"><strong>{{ lvl }}</strong>
+    <span class="small muted">{{ lot.rows|selectattr('niveau','equalto',lvl)|list|length }} local(aux)</span>
+  </div>
+  <div class="localgrid">
+    {% for r in lot.rows if r.niveau == lvl %}
+      <a class="chip" href="{{ url_for('local_page', key=lot.key, row=r.row) }}">{{ r.designation }}</a>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
 <script>
 const LOT_KEY = {{ lot.key|tojson }};
 document.getElementById("addLocal").addEventListener("click", async () => {

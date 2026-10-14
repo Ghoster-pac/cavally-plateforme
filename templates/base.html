@@ -1,22 +1,44 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-theme="light">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b6b6f">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Suivi de l'avancement des travaux — Projet CAVALLY">
   <title>{% block title %}Suivi Travaux — Projet CAVALLY{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b6b6f'/%3E%3Ctext x='16' y='23' font-size='17' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'%3EC%3C/text%3E%3C/svg%3E">
+  <script>
+    /* Applique le thème choisi (ou la préférence système) avant le rendu */
+    (function () {
+      try {
+        var t = localStorage.getItem("cavally_theme");
+        if (t !== "light" && t !== "dark") {
+          t = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="logo">CET</span> Suivi Travaux — Projet CAVALLY</div>
-    <nav>
+    <button class="navtoggle" id="navToggle" aria-label="Ouvrir le menu" aria-expanded="false">☰</button>
+    <a class="brand" href="{{ url_for('home') }}">
+      <span class="logo">CET</span>
+      <span class="brand-txt">Suivi Travaux — Projet CAVALLY</span>
+    </a>
+    <button class="themebtn" id="themeBtn" type="button" aria-label="Changer de thème" title="Thème clair / sombre">🌙</button>
+    <nav id="mainNav" aria-label="Navigation principale">
       <a href="{{ url_for('home') }}" class="{{ 'active' if nav=='home' }}">Tableau de bord</a>
       <a href="{{ url_for('import_page') }}" class="{{ 'active' if nav=='import' }}">Importer</a>
       <a href="{{ url_for('export_page') }}" class="{{ 'active' if nav=='export' }}">Exporter</a>
       <a href="{{ url_for('help_page') }}" class="{{ 'active' if nav=='help' }}">Aide</a>
     </nav>
-    <div class="user">👤
-      <input id="userName" placeholder="Votre nom" autocomplete="off">
+    <div class="user">
+      <span aria-hidden="true">👤</span>
+      <input id="userName" placeholder="Votre nom" autocomplete="off" aria-label="Votre nom">
     </div>
   </header>
   <main>

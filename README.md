@@ -53,6 +53,15 @@ Au premier lancement, la base `data/cavally.db` est créée et initialisée à p
 
 Les champs sont enregistrés automatiquement (≈ 0,5 s après la dernière frappe).
 
+### Interface
+
+- **Responsive** : l'interface s'adapte au téléphone, à la tablette et à
+  l'ordinateur. Sur petit écran, les tableaux se transforment automatiquement en
+  cartes lisibles et le menu devient un bouton ☰.
+- **Thème clair / sombre** : bouton 🌙 / ☀️ en haut à droite ; par défaut, le
+  thème suit la préférence du système.
+- **Impression** propre des tableaux (les boutons et menus sont masqués).
+
 ## Déploiement en ligne
 
 > **Recommandé pour un hébergement 100 % gratuit et durable :**

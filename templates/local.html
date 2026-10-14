@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% block title %}{{ local.designation }} — {{ lot.label }}{% endblock %}
 {% block content %}
-<p class="sub"><a href="{{ url_for('home') }}">Tableau de bord</a> ·
+<p class="crumbs"><a href="{{ url_for('home') }}">Tableau de bord</a> ›
   <a href="{{ url_for('lot_page', key=lot.key) }}">{{ lot.label }}</a></p>
 <h1>{{ local.designation }}</h1>
-<p class="sub">Niveau {{ local.niveau }} · {{ lot.label }} — renseignez toutes les tâches de ce local.
+<p class="sub">Niveau {{ local.niveau or "—" }} · {{ lot.label }} — renseignez toutes les tâches de ce local.
   <span id="saved" class="saved">✓ enregistré</span></p>
 
-<div class="card">
-  <table id="tasks">
-    <thead><tr><th style="min-width:260px">Tâche</th><th style="width:100px">Avancement %</th>
-      <th style="width:170px">Statut</th><th style="min-width:200px">Observation</th></tr></thead>
+<div class="tablewrap">
+  <table id="tasks" class="tbl-cards">
+    <thead><tr><th style="min-width:260px">Tâche</th><th style="width:110px">Avancement %</th>
+      <th style="width:170px">Statut</th><th style="min-width:220px">Observation</th></tr></thead>
     <tbody id="tasksBody"><tr><td colspan="4" class="muted">Chargement…</td></tr></tbody>
   </table>
 </div>
@@ -20,21 +20,31 @@
   <textarea id="comment" rows="3" placeholder="Commentaire global sur ce local…"></textarea>
 </div>
 
-<div class="card" style="margin-top:12px">
-  <strong>Modifier ce local</strong>
-  <div class="toolbar" style="margin-top:8px;align-items:flex-end">
-    <label style="display:flex;flex-direction:column;gap:4px;min-width:240px">Désignation
-      <input id="editDesig" type="text" value="{{ local.designation }}">
-    </label>
-    <label style="display:flex;flex-direction:column;gap:4px;min-width:160px">Niveau
-      <input id="editNiv" type="text" list="nivList" value="{{ local.niveau }}">
-      <datalist id="nivList">
-        {% for lvl in lot.levels %}<option value="{{ lvl }}">{% endfor %}
-      </datalist>
-    </label>
-    <button class="btn primary" id="editLocal">Enregistrer</button>
+<div class="grid cols-2" style="margin-top:16px">
+  <div class="card">
+    <strong>Modifier ce local</strong>
+    <div class="toolbar" style="margin-top:12px">
+      <label class="fld grow"><span>Désignation</span>
+        <input id="editDesig" type="text" value="{{ local.designation }}">
+      </label>
+      <label class="fld" style="min-width:150px"><span>Niveau</span>
+        <input id="editNiv" type="text" list="nivList" value="{{ local.niveau }}">
+        <datalist id="nivList">
+          {% for lvl in lot.levels %}<option value="{{ lvl }}">{% endfor %}
+        </datalist>
+      </label>
+      <div style="align-self:flex-end"><button class="btn primary" id="editLocal">Enregistrer</button></div>
+    </div>
+    <div id="editErr" class="small" style="color:var(--bad);display:none"></div>
   </div>
-  <div id="editErr" class="small" style="color:var(--err);margin-top:6px;display:none"></div>
+
+  <div class="card">
+    <strong>Supprimer ce local</strong>
+    <p class="small muted" style="margin:8px 0 12px">Supprime ce local et toutes ses saisies.
+      Un local d'origine est masqué (conservé dans le modèle Excel).</p>
+    <button class="btn danger" id="delLocal">Supprimer ce local</button>
+    <div id="delErr" class="small" style="color:var(--bad);margin-top:8px;display:none"></div>
+  </div>
 </div>
 {% endblock %}
 
@@ -54,10 +64,10 @@ function render(tasks){
     const tr = document.createElement("tr");
     tr.dataset.task = t.id;
     tr.innerHTML = `
-      <td>${Cav.esc(t.label)}</td>
-      <td><input class="av" type="number" min="0" max="100" step="5" value="${av100}" style="width:80px;text-align:right"></td>
-      <td><select class="st">${STATUSES.map(s=>`<option ${s===t.st?'selected':''}>${Cav.esc(s)}</option>`).join("")}</select></td>
-      <td><input class="obs" type="text" value="${Cav.esc(t.obs)}" placeholder="observation…"></td>`;
+      <td data-label="Tâche">${Cav.esc(t.label)}</td>
+      <td data-label="Avancement %"><input class="av field-av" type="number" min="0" max="100" step="5" value="${av100}"></td>
+      <td data-label="Statut"><select class="st">${STATUSES.map(s=>`<option ${s===t.st?'selected':''}>${Cav.esc(s)}</option>`).join("")}</select></td>
+      <td data-label="Observation"><input class="obs field-obs" type="text" value="${Cav.esc(t.obs)}" placeholder="observation…"></td>`;
     tb.appendChild(tr);
   });
 }

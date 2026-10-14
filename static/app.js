@@ -81,11 +81,43 @@ const Cav = (() => {
     });
   }
 
+  // Menu de navigation (mobile)
+  function initNav() {
+    const btn = document.getElementById("navToggle");
+    const nav = document.getElementById("mainNav");
+    if (!btn || !nav) return;
+    btn.addEventListener("click", () => {
+      const open = nav.classList.toggle("open");
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  }
+
+  // Bascule clair / sombre
+  function initTheme() {
+    const btn = document.getElementById("themeBtn");
+    const root = document.documentElement;
+    function icon() {
+      if (btn) btn.textContent = root.getAttribute("data-theme") === "dark" ? "☀️" : "🌙";
+    }
+    icon();
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+      const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+      root.setAttribute("data-theme", next);
+      try { localStorage.setItem("cavally_theme", next); } catch (e) {}
+      icon();
+    });
+  }
+
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
-  document.addEventListener("DOMContentLoaded", initUserField);
+  document.addEventListener("DOMContentLoaded", () => {
+    initUserField();
+    initNav();
+    initTheme();
+  });
   return { getUser, setUser, api, toast, pct, fmtPct, saver, esc };
 })();
