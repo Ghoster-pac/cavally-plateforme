@@ -1,0 +1,50 @@
+name: Build Android (APK)
+
+# Construit un fichier APK installable, sans avoir besoin d'Android Studio.
+# Onglet Actions → « Build Android (APK) » → Run workflow, puis télécharge
+# l'artefact « cavally-android-apk » en bas de la page.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/build-android.yml"
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Dépendances JS
+        working-directory: apps/mobile
+        run: npm ci || npm install
+
+      - name: Synchroniser Capacitor (Android)
+        working-directory: apps/mobile
+        run: npx cap sync android
+
+      - name: Construire l'APK (debug, installable directement)
+        working-directory: apps/mobile/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Publier l'APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cavally-android-apk
+          path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

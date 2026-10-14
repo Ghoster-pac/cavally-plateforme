@@ -1,0 +1,45 @@
+name: Build Windows (.exe / .msi)
+
+# Construit l'application de bureau Windows : installateur .exe (NSIS),
+# paquet .msi et version portable .exe.
+# Onglet Actions → « Build Windows (.exe / .msi) » → Run workflow,
+# puis télécharge l'artefact « cavally-windows ».
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "apps/desktop/**"
+      - ".github/workflows/build-windows.yml"
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Dépendances
+        working-directory: apps/desktop
+        run: npm ci || npm install
+
+      - name: Construire l'installateur (.exe, .msi, portable)
+        working-directory: apps/desktop
+        run: npx electron-builder --win nsis msi portable
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publier les fichiers
+        uses: actions/upload-artifact@v4
+        with:
+          name: cavally-windows
+          path: |
+            apps/desktop/dist/*.exe
+            apps/desktop/dist/*.msi
+          if-no-files-found: error

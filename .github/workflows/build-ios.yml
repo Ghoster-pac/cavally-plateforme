@@ -1,0 +1,60 @@
+name: Build iOS (IPA non signé)
+
+# Construit une application iOS (.ipa non signée) à installer ensuite avec
+# AltStore / Sideloadly (qui la re-signent pour votre appareil).
+# Nécessite un runner macOS (fourni gratuitement par GitHub).
+# Onglet Actions → « Build iOS (IPA non signé) » → Run workflow.
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/build-ios.yml"
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Dépendances JS
+        working-directory: apps/mobile
+        run: npm ci || npm install
+
+      - name: Synchroniser Capacitor (iOS)
+        working-directory: apps/mobile
+        run: npx cap sync ios
+
+      - name: CocoaPods
+        working-directory: apps/mobile/ios/App
+        run: pod install
+
+      - name: Construire l'archive (sans signature)
+        working-directory: apps/mobile/ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace -scheme App \
+            -configuration Release -sdk iphoneos \
+            -archivePath "$PWD/build/App.xcarchive" \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+            clean archive
+
+      - name: Empaqueter l'IPA non signé
+        working-directory: apps/mobile/ios/App
+        run: |
+          rm -rf build/Payload build/CAVALLY-unsigned.ipa
+          mkdir -p build/Payload
+          cp -R "build/App.xcarchive/Products/Applications/App.app" build/Payload/
+          cd build && zip -qry CAVALLY-unsigned.ipa Payload
+
+      - name: Publier l'IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: cavally-ios-ipa
+          path: apps/mobile/ios/App/build/CAVALLY-unsigned.ipa
+          if-no-files-found: error
