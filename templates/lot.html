@@ -41,15 +41,43 @@
   </table>
 </div>
 
-<h2>Locaux du lot</h2>
-{% for lvl in lot.levels %}
-<div class="card" style="margin-bottom:12px">
-  <strong>{{ lvl }}</strong>
-  <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
-    {% for r in lot.rows if r.niveau == lvl %}
-      <a class="chip" href="{{ url_for('local_page', key=lot.key, row=r.row) }}">{{ r.designation }}</a>
-    {% endfor %}
+<div class="card">
+  <strong>Ajouter un local personnalisé</strong>
+  <div class="toolbar" style="margin-top:8px;align-items:flex-end">
+    <label style="display:flex;flex-direction:column;gap:4px;min-width:240px">Désignation
+      <input id="newDesig" type="text" placeholder="Ex. Garage, Local annexe...">
+    </label>
+    <label style="display:flex;flex-direction:column;gap:4px;min-width:160px">Niveau
+      <input id="newNiv" type="text" list="nivList" placeholder="RDC, R+1...">
+      <datalist id="nivList">
+        {% for lv in lot.levels %}<option value="{{ lv }}">{% endfor %}
+      </datalist>
+    </label>
+    <button class="btn primary" id="addLocal">Ajouter</button>
+    <span class="muted small">Le numéro est attribué automatiquement (à la suite)</span>
   </div>
 </div>
-{% endfor %}
+
+<script>
+const LOT_KEY = {{ lot.key|tojson }};
+document.getElementById("addLocal").addEventListener("click", async () => {
+  const desig = document.getElementById("newDesig").value.trim();
+  const niv = document.getElementById("newNiv").value.trim();
+  const err = document.getElementById("addErr");
+  err.style.display = "none";
+  if (!desig) { err.textContent = "La désignation est requise."; err.style.display = "block"; return; }
+  try {
+    const res = await fetch(`/api/lot/${LOT_KEY}/local`, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({designation: desig, niveau: niv, user: Cav.user()})
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "Erreur");
+    location.reload();
+  } catch (e) {
+    err.textContent = e.message; err.style.display = "block";
+  }
+});
+</script>
 {% endblock %}

@@ -19,6 +19,15 @@
 <div class="card">
   <textarea id="comment" rows="3" placeholder="Commentaire global sur ce local…"></textarea>
 </div>
+
+<div class="card" style="margin-top:12px">
+  <strong>Supprimer ce local</strong>
+  <div class="toolbar" style="margin-top:8px;align-items:center">
+    <button class="btn" id="delLocal" style="background:var(--err);color:#fff;border-color:var(--err)">Supprimer</button>
+    <span class="muted small">Supprime ce local et toutes ses saisies.</span>
+  </div>
+  <div id="delErr" class="small" style="color:var(--err);margin-top:6px;display:none"></div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -66,5 +75,19 @@ Cav.api(`/api/lot/${LOT_KEY}/local/${ROW}`).then(d => {
   render(d.tasks);
   document.getElementById("comment").value = d.comment || "";
 }).catch(e => Cav.toast("Erreur chargement : " + e.message, "err"));
+
+document.getElementById("delLocal").addEventListener("click", async () => {
+  const err = document.getElementById("delErr");
+  err.style.display = "none";
+  if (!confirm("Supprimer ce local ? Cela effacera toutes les saisies de ce local.")) return;
+  try {
+    const res = await fetch(`/api/lot/${LOT_KEY}/local/${ROW}`, {method: "DELETE"});
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "Erreur");
+    window.location = `/lot/${LOT_KEY}`;
+  } catch (e) {
+    err.textContent = e.message; err.style.display = "block";
+  }
+});
 </script>
 {% endblock %}

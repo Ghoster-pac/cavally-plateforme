@@ -50,9 +50,22 @@ def get_structure(refresh: bool = False) -> dict:
     return st
 
 
-def lot_by_key(structure: dict, key: str):
+def lot_by_key(structure: dict, key: str, include_custom: bool = True):
     for lot in structure["lots"]:
         if lot["key"] == key:
+            if include_custom:
+                try:
+                    custom = get_custom_locals(key)
+                    existing_rows = {r["row"] for r in lot["rows"]}
+                    for c in custom:
+                        if c["row_num"] not in existing_rows:
+                            lot["rows"].append({
+                                "row": c["row_num"],
+                                "niveau": c.get("niveau") or "",
+                                "designation": c.get("designation") or f"LOCAL {c['row_num']}",
+                            })
+                except Exception:
+                    pass
             return lot
     return None
 
@@ -107,6 +120,15 @@ def init_db(force_seed: bool = False):
             old_value TEXT, new_value TEXT
         );
         CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+        CREATE TABLE IF NOT EXISTS custom_locals (
+            lot TEXT NOT NULL,
+            row_num INTEGER NOT NULL,
+            designation TEXT NOT NULL,
+            niveau TEXT,
+            created_by TEXT,
+            created_at TEXT,
+            PRIMARY KEY (lot, row_num)
+        );
         """
     )
     con.commit()
@@ -394,11 +416,70 @@ def import_cells(parsed: dict, structure: dict, user: str):
     return save_cells(updates, user)
 
 
-def forgot(seed_clear: bool = False):
+def get_custom_locals(lot_key: str):
     con = connect()
-    if seed_clear:
-        con.execute("DELETE FROM entries")
-        con.commit()
-    seed(con, clear=seed_clear)
-    con.commit()
+    rows = con.execute(
+        "SELECT row_num, designation, niveau, created_by, created_at FROM custom_locals "
+        "WHERE lot=? ORDER BY row_num",
+        (lot_key,),
+    ).fetchall()
     con.close()
+    return [dict(x) for x in rows]
+
+
+def add_custom_local(lot_key: str, designation: str, niveau: str | None, user: str):
+    st = get_structure()
+    lot = lot_by_key(st, lot_key)
+    if not lot:
+        raise ValueError("lot inconnu")
+    con = connect()
+    # trouver prochain numero libre au-delà des lignes existantes
+    max_base = 0
+    for r in lot["rows"]:
+        if r["row"] > max_base:
+            max_base = r["row"]
+    # aussi vérifier custom
+    cur = con.execute("SELECT MAX(row_num) as m FROM custom_locals WHERE lot=?", (lot_key,)).fetchone()
+    if cur and cur["m"] is not None and cur["m"] > max_base:
+        max_base = cur["m"]
+    row_num = max_base + 1
+    ts = now_iso()
+    try:
+        con.execute(
+            "INSERT INTO custom_locals(lot,row_num,designation,niveau,created_by,created_at) VALUES(?,?,?,?,?,?)",
+            (lot_key, row_num, designation, niveau or "", user, ts),
+        )
+        con.commit()
+        created = row_num
+    except sqlite3.IntegrityError:
+        # si conflit, réessayer avec +2
+        row_num += 1
+        con.execute(
+            "INSERT INTO custom_locals(lot,row_num,designation,niveau,created_by,created_at) VALUES(?,?,?,?,?,?)",
+            (lot_key, row_num, designation, niveau or "", user, ts),
+        )
+        con.commit()
+        created = row_num
+    # rafraîchir structure cache pour refléter nouvelles lignes
+    try:
+        os.remove(STRUCTURE_PATH)
+    except OSError:
+        pass
+    global _STRUCT
+    _STRUCT = None
+
+
+def delete_custom_local(lot_key: str, row_num: int):
+    con = connect()
+    # supprimer les saisies associées
+    con.execute("DELETE FROM entries WHERE lot=? AND row=?", (lot_key, row_num))
+    con.execute("DELETE FROM edits WHERE lot=? AND row=?", (lot_key, row_num))
+    con.execute("DELETE FROM custom_locals WHERE lot=? AND row_num=?", (lot_key, row_num))
+    con.commit()
+    try:
+        os.remove(STRUCTURE_PATH)
+    except OSError:
+        pass
+    global _STRUCT
+    _STRUCT = None
+

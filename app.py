@@ -179,8 +179,28 @@ def api_local(key, row):
                     "tasks": tasks, "comment": comment})
 
 
-@app.route("/api/save", methods=["POST"])
-def api_save():
+@app.route("/api/lot/<key>/local", methods=["POST"])
+def api_add_local(key):
+    body = request.get_json(force=True, silent=True) or {}
+    designation = (body.get("designation") or "").strip()
+    niveau = (body.get("niveau") or "").strip() or None
+    user = (body.get("user") or "Anonyme").strip() or "Anonyme"
+    if not designation:
+        return jsonify({"error": "designation requise"}), 400
+    try:
+        row_num = db.add_custom_local(key, designation, niveau, user)
+        return jsonify({"ok": True, "row": row_num})
+    except Exception as exc:  # noqa
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/lot/<key>/local/<int:row>", methods=["DELETE"])
+def api_del_local(key, row):
+    try:
+        db.delete_custom_local(key, row)
+        return jsonify({"ok": True})
+    except Exception as exc:  # noqa
+        return jsonify({"error": str(exc)}), 400
     body = request.get_json(force=True, silent=True) or {}
     updates = body.get("updates") or []
     if not updates:
