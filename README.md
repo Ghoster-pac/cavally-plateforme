@@ -62,6 +62,25 @@ Les champs sont enregistrés automatiquement (≈ 0,5 s après la dernière frap
   thème suit la préférence du système.
 - **Impression** propre des tableaux (les boutons et menus sont masqués).
 
+### Application installable + mode hors-ligne (PWA)
+
+La plateforme est une **PWA** : elle s'installe comme une application sur tous les
+appareils, sans magasin d'applications.
+
+- **Android (Chrome)** : ⋮ → « Installer l'application ».
+- **iPhone / iPad (Safari)** : Partager → « Sur l'écran d'accueil ».
+- **Windows / macOS / Linux (Chrome / Edge)** : icône « Installer » dans la barre
+  d'adresse.
+
+**Hors-ligne** : sans réseau, la saisie continue. Les modifications sont stockées
+sur l'appareil (file d'attente locale) puis **synchronisées automatiquement dès le
+retour du réseau**. Un voyant en haut à droite indique l'état
+(● en ligne · ● hors ligne · ⟳ synchronisation) et le nombre de saisies en attente.
+
+Fichiers concernés : `static/manifest.webmanifest` (manifeste),
+`static/sw.js` (service worker : cache de l'interface et des dernières données),
+`static/app.js` (file d'attente et synchronisation).
+
 ## Déploiement en ligne
 
 > **Recommandé pour un hébergement 100 % gratuit et durable :**

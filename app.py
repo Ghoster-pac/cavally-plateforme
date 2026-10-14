@@ -7,7 +7,7 @@ import tempfile
 from datetime import datetime
 
 from flask import (Flask, jsonify, render_template, request, send_file,
-                   redirect, url_for, flash)
+                   send_from_directory, redirect, url_for, flash)
 
 import db
 import excel_engine as E
@@ -54,6 +54,26 @@ def home():
     summary = db.build_summary()
     return render_template("dashboard.html", summary=summary, activity=db.recent_edits(20),
                            nav="home")
+
+
+@app.route("/manifest.webmanifest")
+def manifest():
+    """Manifeste PWA : rend la plateforme installable sur mobile et bureau."""
+    resp = send_from_directory(os.path.join(app.root_path, "static"),
+                               "manifest.webmanifest",
+                               mimetype="application/manifest+json")
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
+@app.route("/sw.js")
+def service_worker():
+    """Service worker servi à la racine pour contrôler tout le site (hors-ligne)."""
+    resp = send_from_directory(os.path.join(app.root_path, "static"), "sw.js",
+                               mimetype="application/javascript")
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["Service-Worker-Allowed"] = "/"
+    return resp
 
 
 @app.route("/lot/<key>")

@@ -6,8 +6,14 @@
   <meta name="theme-color" content="#0b6b6f">
   <meta name="color-scheme" content="light dark">
   <meta name="description" content="Suivi de l'avancement des travaux — Projet CAVALLY">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CAVALLY">
   <title>{% block title %}Suivi Travaux — Projet CAVALLY{% endblock %}</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b6b6f'/%3E%3Ctext x='16' y='23' font-size='17' font-family='sans-serif' font-weight='bold' fill='white' text-anchor='middle'%3EC%3C/text%3E%3C/svg%3E">
+  <link rel="manifest" href="{{ url_for('manifest') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
   <script>
     /* Applique le thème choisi (ou la préférence système) avant le rendu */
     (function () {
@@ -37,10 +43,14 @@
       <a href="{{ url_for('help_page') }}" class="{{ 'active' if nav=='help' }}">Aide</a>
     </nav>
     <div class="user">
+      <span id="netStatus" class="netstatus" title="État de la connexion"></span>
       <span aria-hidden="true">👤</span>
       <input id="userName" placeholder="Votre nom" autocomplete="off" aria-label="Votre nom">
     </div>
   </header>
+  <div id="offlineBar" class="offlinebar" hidden>
+    Hors ligne — vos saisies sont conservées et seront synchronisées automatiquement au retour du réseau.
+  </div>
   <main>
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -52,6 +62,16 @@
     {% block content %}{% endblock %}
   </main>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script>
+    /* Enregistrement du service worker (application installable + hors-ligne) */
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("/sw.js").catch(function (e) {
+          console.warn("Service worker non enregistré :", e);
+        });
+      });
+    }
+  </script>
   {% block scripts %}{% endblock %}
 </body>
 </html>
