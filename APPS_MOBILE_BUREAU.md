@@ -18,6 +18,35 @@ connexion (grâce au mode hors-ligne de la plateforme).
 Toutes pointent vers la plateforme en ligne (une seule adresse à changer, voir
 plus bas). Le bureau peut aussi être compilé pour Linux et macOS.
 
+> ✅ **Les trois compilations ont été testées avec succès** et produisent :
+> - **Android** : `app-debug.apk` (installable directement sur téléphone/tablette)
+> - **iPhone** : `CAVALLY-unsigned.ipa`
+> - **Windows** : `CAVALLY Setup 1.0.0.exe` (installateur), `CAVALLY 1.0.0.msi`
+>   et `CAVALLY 1.0.0.exe` (portable, sans installation)
+
+---
+
+## ⭐ Récupérer les applications déjà compilées
+
+1. Ouvrez le dépôt **`Ghoster-pac/cavally-plateforme`** sur GitHub.
+2. Onglet **Actions**.
+3. Cliquez sur la compilation voulue (**Build Android (APK)**,
+   **Build Windows (.exe / .msi)** ou **Build iOS (IPA non signé)**).
+4. En bas de la page, section **Artifacts**, cliquez pour télécharger :
+   - `cavally-android-apk` → contient `app-debug.apk`
+   - `cavally-windows` → contient les `.exe` et `.msi`
+   - `cavally-ios-ipa` → contient `CAVALLY-unsigned.ipa`
+5. Pour déclencher une nouvelle compilation : **Run workflow** (bouton à droite).
+
+### Installation sur les appareils
+
+- **Android** : transférez `app-debug.apk` sur le téléphone, ouvrez-le, et
+  autorisez « Installer depuis cette source » si demandé.
+- **iPhone / iPad** : le `.ipa` n'est pas signé ; installez-le avec
+  **AltStore** ou **Sideloadly** (qui le re-signent pour votre appareil).
+- **Windows** : exécutez `CAVALLY Setup 1.0.0.exe` (ou le `.msi`). La version
+  portable `.exe` se lance sans installation.
+
 ---
 
 ## ⭐ Méthode recommandée : GitHub Actions (aucun outil à installer)
