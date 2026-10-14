@@ -1,0 +1,23 @@
+app = "cavally-suivi"
+primary_region = "cdg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  CAVALLY_DB = "/data/cavally.db"
+  CAVALLY_JOURNAL = "DELETE"
+  PYTHONUNBUFFERED = "1"
+
+[mounts]
+  source = "cavally_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
