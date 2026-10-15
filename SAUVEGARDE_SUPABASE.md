@@ -45,13 +45,22 @@ Sur PythonAnywhere, ajoutez-les dans le fichier WSGI (voir
 
 Onglet **Sauvegarde** de la plateforme :
 
-- **État** : dernière sauvegarde réussie, volumes (local vs en ligne).
-- **Sauvegarder maintenant** : envoie toute la base + enregistre un
+- **État** : dernière synchronisation, dernière sauvegarde réussie, volumes
+  (local vs en ligne).
+- **Synchroniser maintenant** : force tout de suite un cycle de fusion
+  locale ↔ en ligne (les saisies des autres appareils sont récupérées, les
+  vôtres sont envoyées).
+- **Nouvel instantané** : envoie toute la base + enregistre un
   **instantané daté** (les 10 derniers sont conservés).
 - **Restaurer depuis le cloud** :
   - *Remplacer* : le serveur reprend exactement la copie en ligne (saisir
     `RESTORE` pour confirmer) ;
-  - **Fusionner** : met à jour sans rien supprimer.
+  - *Fusionner* : met à jour sans rien supprimer.
+
+Tout cela est **automatique** : la plateforme synchronise avant chaque requête
+(au plus une fois toutes les ~20 s), enregistre un instantané daté toutes les
+~15 min, et le navigateur vérifie les nouveautés toutes les ~30 s (la page se
+rafraîchit si un autre appareil a saisi quelque chose).
 
 ## 3 bis. Sauvegarde automatique périodique (recommandé)
 
@@ -90,6 +99,18 @@ mode **Remplacer**. Toutes les données sont reconstruites depuis Supabase.
   lancement, toutes les ~15 s, au retour en avant-plan (site + application), après
   import/saisie, et un cycle toutes les ~20 s côté serveur. Un **instantané daté**
   est enregistré périodiquement.
+- **Fusion « dernière écriture gagne »** : chaque ligne porte un horodatage
+  (`updated_at`, `created_at`, `deleted_at`) au format `AAAA-MM-JJ HH:MM:SS`,
+  directement comparable. À chaque cycle, l'appareil lit la copie en ligne, garde
+  la version la plus récente pour chaque clé, réécrit le résultat en local puis ne
+  renvoie en ligne que ce qui différait de la copie lue.
+- **Pierres tombales** : une saisie effacée n'est pas supprimée en ligne mais
+  réécrite avec une valeur vide horodatée ; un local supprimé laisse une ligne
+  dans `deleted_locals`. C'est ce qui permet à une suppression de se propager sans
+  effacer, au passage, les lignes ajoutées par un autre appareil (l'ancien
+  « delete en masse » a été retiré pour cette raison).
+- Aucune donnée n'est supprimée automatiquement en ligne : les envois sont des
+  *upserts*, jamais des `DELETE` massifs.
 
 ## Sécurité
 

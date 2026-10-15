@@ -34,17 +34,17 @@ tel quel au moment de la compilation.
 ## 📥 Téléchargement direct (fichiers prêts à l'emploi)
 
 Les fichiers déjà compilés sont sur la page de la version
-[**v1.0.0**](https://github.com/Ghoster-pac/cavally-plateforme/releases/tag/v1.0.0) :
+[**v1.0.1**](https://github.com/Ghoster-pac/cavally-plateforme/releases/tag/v1.0.1) :
 
 | Plateforme | Fichier | Lien direct |
 | --- | --- | --- |
-| Android | `CAVALLY-android.apk` | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.0/CAVALLY-android.apk) |
-| iPhone / iPad | `CAVALLY-iphone.ipa` | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.0/CAVALLY-iphone.ipa) |
-| Windows (installateur) | `CAVALLY-setup-windows.exe` | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.0/CAVALLY-setup-windows.exe) |
-| Windows (MSI) | `CAVALLY-windows.msi` | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.0/CAVALLY-windows.msi) |
-| Windows (portable) | `CAVALLY-portable-windows.exe` | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.0/CAVALLY-portable-windows.exe) |
-| **Linux (Parrot OS…)** | **`CAVALLY-linux-x86_64.AppImage`** | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.0/CAVALLY-linux-x86_64.AppImage) |
-| **Linux (Parrot OS…)** | **`CAVALLY-linux-x86_64.deb`** | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.0/CAVALLY-linux-x86_64.deb) |
+| Android | `CAVALLY-android.apk` | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.1/CAVALLY-android.apk) |
+| iPhone / iPad | `CAVALLY-iphone.ipa` | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.1/CAVALLY-iphone.ipa) |
+| Windows (installateur) | `CAVALLY-setup-windows.exe` | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.1/CAVALLY-setup-windows.exe) |
+| Windows (MSI) | `CAVALLY-windows.msi` | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.1/CAVALLY-windows.msi) |
+| Windows (portable) | `CAVALLY-portable-windows.exe` | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.1/CAVALLY-portable-windows.exe) |
+| **Linux (Parrot OS…)** | **`CAVALLY-linux-x86_64.AppImage`** | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.1/CAVALLY-linux-x86_64.AppImage) |
+| **Linux (Parrot OS…)** | **`CAVALLY-linux-x86_64.deb`** | [télécharger](https://github.com/Ghoster-pac/cavally-plateforme/releases/download/v1.0.1/CAVALLY-linux-x86_64.deb) |
 
 ---
 
@@ -114,18 +114,23 @@ sur ses propres serveurs** et vous récupérez juste les fichiers finaux.
 
 - **Sur l'appareil** : toutes les saisies, les locaux ajoutés/supprimés et les
   commentaires sont enregistrés localement (aucun compte, aucun serveur requis).
-- **En ligne (sauvegarde)** : à chaque modification, l'application envoie aussi
-  la donnée vers **Supabase** dès qu'un réseau est disponible. Le bouton
-  **Sauvegarde → « ☁ Sauvegarder maintenant »** crée un instantané complet.
-  Le bouton **Restaurer** récupère la sauvegarde en ligne (utile après une
-  réinstallation ou un changement de téléphone).
-- **Excel** : l'**import** lit un fichier `.xlsx` et l'**export** régénère le
-  classeur complet (mêmes onglets, mises en forme, listes et graphique).
+- **En ligne (sauvegarde + synchronisation)** : l'application envoie ses saisies
+  vers **Supabase** dès qu'un réseau est disponible, **et récupère celles des
+  autres appareils**. La copie en ligne sert de point de rendez-vous entre le
+  site, les téléphones et les ordinateurs : la date d'écriture la plus récente
+  gagne, donc rien n'est perdu. La synchronisation est **automatique** (toutes
+  les ~15 s, au retour en avant-plan, après un import) et la première ouverture
+  d'une application vide restaure toute seule la sauvegarde en ligne.
+  Les boutons **« Synchroniser maintenant »** / **« Nouvel instantané »** /
+  **« Restaurer »** sont disponibles page **Sauvegarde**.
+- **Excel** : l'**import** lit un fichier `.xlsx` et **complète** les cases
+  encore vides (il n'écrase aucune saisie existante, sauf si vous choisissez
+  « Mettre à jour ») ; l'**export** régénère le classeur complet (mêmes onglets,
+  mises en forme, listes et graphique).
 
-> Pour récupérer des données déjà saisies sur la plateforme web : ouvrez la page
-> **Sauvegarde** du site, cliquez **« ☁ Sauvegarder maintenant »**, puis dans
-> l'application, page **Sauvegarde → Restaurer**. Sinon, exportez le fichier
-> Excel depuis le site et importez-le dans l'application.
+> Les données se synchronisent désormais **toutes seules** entre le site et les
+> applications : une saisie faite sur le téléphone apparaît sur le site (et
+> inversement) quelques secondes plus tard, sans rien exporter à la main.
 
 ---
 

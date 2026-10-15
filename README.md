@@ -4,7 +4,11 @@ Application web pour **saisir à plusieurs l'avancement des travaux** (par lot, 
 puis **générer le fichier Excel officiel** identique au modèle d'origine.
 
 - Saisie en ligne par plusieurs personnes (aucun compte : accès par le lien partagé)
-- Import d'un classeur Excel déjà rempli pour fusionner les données
+- **Synchronisation automatique** avec les applications Android / iPhone /
+  Windows / Linux : la copie en ligne sert de point de rendez-vous et la
+  saisie la plus récente gagne
+- Import d'un classeur Excel déjà rempli pour **compléter** les données
+  (les cases déjà saisies ne sont pas écrasées)
 - Export d'un classeur strictement conforme au modèle : mises en forme, listes
   déroulantes, **graphique du tableau de bord** et onglets de synthèse conservés
 
@@ -48,10 +52,17 @@ Au premier lancement, la base `data/cavally.db` est créée et initialisée à p
    (désignation + niveau) ; sur la page d'un local, **modifiez** sa désignation/son
    niveau ou **supprimez-le** (les locaux d'origine sont masqués, pas effacés du
    modèle Excel).
-6. **Importer** : déposez un classeur rempli pour fusionner.
+6. **Importer** : déposez un classeur rempli — par défaut l'import **complète**
+   les cases vides (choisissez « Mettre à jour » pour remplacer les valeurs déjà
+   saisies).
 7. **Exporter** : téléchargez le classeur complet, prêt à diffuser.
+8. **Sauvegarde** : état de la synchronisation en ligne, « Synchroniser
+   maintenant », instantané daté et restauration.
 
 Les champs sont enregistrés automatiquement (≈ 0,5 s après la dernière frappe).
+Chaque saisie est **synchronisée automatiquement** avec la base en ligne, puis
+avec les autres appareils (téléphones, ordinateurs) : la version la plus récente
+est toujours conservée.
 
 ### Interface
 
@@ -73,8 +84,8 @@ appareils, sans magasin d'applications.
   d'adresse.
 
 **Hors-ligne** : sans réseau, la saisie continue. Les modifications sont stockées
-sur l'appareil (file d'attente locale) puis **synchronisées automatiquement dès le
-retour du réseau**. Un voyant en haut à droite indique l'état
+sur l'appareil puis **synchronisées automatiquement** (dans les deux sens) dès le
+retour du réseau. Un voyant en haut à droite indique l'état
 (● en ligne · ● hors ligne · ⟳ synchronisation) et le nombre de saisies en attente.
 
 Fichiers concernés : `static/manifest.webmanifest` (manifeste),
@@ -94,7 +105,7 @@ l'appareil) et l'import/export Excel sont embarqués, avec **sauvegarde en ligne
 - **Linux (Parrot OS, Debian, Ubuntu…)** → **AppImage** (portable) et paquet **`.deb`**
 
 Il existe des applications autonomes **déjà compilées** : voir la page
-[**version v1.0.0**](https://github.com/Ghoster-pac/cavally-plateforme/releases/tag/v1.0.0)
+[**version v1.0.1**](https://github.com/Ghoster-pac/cavally-plateforme/releases/tag/v1.0.1)
 ou, pour les construire vous-même, l'onglet *Actions* du dépôt (gratuit, sans
 installer d'outil). Guide complet :
 **[APPS_MOBILE_BUREAU.md](APPS_MOBILE_BUREAU.md)**.
