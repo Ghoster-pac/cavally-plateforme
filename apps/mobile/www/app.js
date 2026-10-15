@@ -176,7 +176,7 @@
   function saveCells(updates, user) {
     const ts = nowIso();
     let n = 0;
-    const upserts = [], deletes = [];
+    const upserts = [];
     for (const u of updates) {
       const lot = u.lot, row = parseInt(u.row, 10), task = u.task, field = u.field;
       const val = normalize(field, u.value);
@@ -184,8 +184,10 @@
       const oldVal = oldv === undefined ? null : oldv;
       if (oldVal === val) continue;
       if (val === null) {
+        // « Pierre tombale » : on garde une trace horodatée de la case vidée
+        // pour que la suppression se propage aux autres appareils.
         entDel(lot, row, task, field);
-        deletes.push({ lot: lot, row: row, task: task, field: field });
+        upserts.push({ lot: lot, row: row, task: task, field: field, value: null, updated_by: user, updated_at: ts });
       } else {
         entSet(lot, row, task, field, val);
         META[ck(lot, row, task, field)] = { u: user, t: ts };
@@ -196,7 +198,7 @@
     }
     if (n) {
       persist(); persistEdits();
-      enqueueCloud({ entries_upserts: upserts, entries_deletes: deletes });
+      enqueueCloud({ entries_upserts: upserts });
       markSaved();
     }
     return n;
@@ -213,8 +215,14 @@
     (CUSTOM[lotKey] || (CUSTOM[lotKey] = {}))[rowNum] = {
       designation: designation, niveau: niveau || "", created_by: user, created_at: nowIso(),
     };
+    // si ce numéro avait été supprimé auparavant, on annule la suppression
+    const op = { custom_locals_upserts: [{ lot: lotKey, row_num: rowNum, designation: designation, niveau: niveau || "", created_by: user, created_at: nowIso() }] };
+    if (DELETED[lotKey] && DELETED[lotKey][rowNum]) {
+      delete DELETED[lotKey][rowNum];
+      op.deleted_locals_deletes = [{ lot: lotKey, row_num: rowNum }];
+    }
     persist();
-    enqueueCloud({ custom_locals_upserts: [{ lot: lotKey, row_num: rowNum, designation: designation, niveau: niveau || "", created_by: user, created_at: nowIso() }] });
+    enqueueCloud(op);
     return rowNum;
   }
 
@@ -235,23 +243,16 @@
     // effacer les saisies de la ligne
     const prefix = lotKey + "|" + rowNum + "|";
     for (const k in ENTRIES) { if (k.indexOf(prefix) === 0) { delete ENTRIES[k]; delete META[k]; } }
-    let mirror;
-    const isCustom = CUSTOM[lotKey] && CUSTOM[lotKey][rowNum];
-    if (isCustom) {
-      delete CUSTOM[lotKey][rowNum];
-      mirror = {
-        entries_deletes: [{ lot: lotKey, row: rowNum }],
-        custom_locals_deletes: [{ lot: lotKey, row_num: rowNum }],
-      };
-    } else {
-      (DELETED[lotKey] || (DELETED[lotKey] = {}))[rowNum] = { deleted_by: user, deleted_at: nowIso() };
-      mirror = {
-        entries_deletes: [{ lot: lotKey, row: rowNum }],
-        deleted_locals_upserts: [{ lot: lotKey, row_num: rowNum, deleted_by: user, deleted_at: nowIso() }],
-      };
-    }
+    if (CUSTOM[lotKey]) delete CUSTOM[lotKey][rowNum];
+    // La suppression est TOUJOURS marquée d'une pierre tombale : les autres
+    // appareils l'apprendront à la synchronisation (et retireront la ligne).
+    const ts = nowIso();
+    (DELETED[lotKey] || (DELETED[lotKey] = {}))[rowNum] = { deleted_by: user, deleted_at: ts };
     persist();
-    enqueueCloud(mirror);
+    enqueueCloud({
+      custom_locals_deletes: [{ lot: lotKey, row_num: rowNum }],
+      deleted_locals_upserts: [{ lot: lotKey, row_num: rowNum, deleted_by: user, deleted_at: ts }],
+    });
   }
 
   /* --------------------------------------------------- Tableau de bord */
@@ -772,17 +773,6 @@
     for (let i = 0; i < rows.length; i += BATCH) {
       await suiFetch("/" + table, { method: "POST", params: { on_conflict: conflict }, body: rows.slice(i, i + BATCH), prefer: "resolution=merge-duplicates,return=minimal" });
     }
-    const localKeys = {};
-    rows.forEach((r) => { localKeys[keys.map((k) => String(r[k])).join("\u0001")] = true; });
-    const cloud = await selectAll(table);
-    for (const cr of cloud) {
-      const k = keys.map((x) => String(cr[x])).join("\u0001");
-      if (!localKeys[k]) {
-        const params = {};
-        keys.forEach((x) => (params[x] = "eq." + cr[x]));
-        await suiFetch("/" + table, { method: "DELETE", params: params, prefer: "return=minimal" });
-      }
-    }
   }
   function dumpAll() {
     const entries = [];
@@ -805,8 +795,10 @@
   function loadAll(payload, replace) {
     if (replace) { ENTRIES = {}; META = {}; CUSTOM = {}; DELETED = {}; }
     (payload.entries || []).forEach((e) => {
-      ENTRIES[ck(e.lot, e.row, e.task, e.field)] = e.value;
-      if (e.updated_by || e.updated_at) META[ck(e.lot, e.row, e.task, e.field)] = { u: e.updated_by || "", t: e.updated_at || "" };
+      const k = ck(e.lot, e.row, e.task, e.field);
+      if (e.value === null || e.value === undefined || e.value === "") { delete ENTRIES[k]; delete META[k]; return; }
+      ENTRIES[k] = e.value;
+      if (e.updated_by || e.updated_at) META[k] = { u: e.updated_by || "", t: e.updated_at || "" };
     });
     (payload.custom_locals || []).forEach((c) => {
       (CUSTOM[c.lot] || (CUSTOM[c.lot] = {}))[c.row_num] = { designation: c.designation, niveau: c.niveau || "", created_by: c.created_by || "", created_at: c.created_at || "" };
@@ -855,6 +847,146 @@
     return await res.json();
   }
 
+  /* ---------------- Synchronisation bidirectionnelle (fusion) ----------------
+     La copie en ligne sert de point de rendez-vous entre le site, les
+     téléphones et les ordinateurs. À chaque cycle : on lit la copie en ligne,
+     on la fusionne avec les données locales (la date d'écriture la plus
+     récente gagne), puis on renvoie en ligne ce qui a changé ici.           */
+  const ENTRY_FIELDS = ["lot", "row", "task", "field", "value", "updated_by", "updated_at"];
+  const CUSTOM_FIELDS = ["lot", "row_num", "designation", "niveau", "created_by", "created_at"];
+  const DELETED_FIELDS = ["lot", "row_num", "deleted_by", "deleted_at"];
+
+  function idEntry(e) { return e.lot + "|" + e.row + "|" + e.task + "|" + e.field; }
+  function idSmall(r) { return r.lot + "|" + r.row_num; }
+  function rowSig(row, fields) {
+    return fields.map((f) => (row[f] === null || row[f] === undefined ? "" : String(row[f]))).join("\u0001");
+  }
+  function mergeRows(localList, remoteList, keyOf, tfield, fields) {
+    const loc = {}, rem = {};
+    localList.forEach((r) => { loc[keyOf(r)] = r; });
+    remoteList.forEach((r) => { rem[keyOf(r)] = r; });
+    const merged = {}, push = [];
+    const keys = {};
+    Object.keys(loc).forEach((k) => (keys[k] = true));
+    Object.keys(rem).forEach((k) => (keys[k] = true));
+    for (const k in keys) {
+      const l = loc[k], r = rem[k];
+      if (!l) { merged[k] = r; continue; }
+      if (!r) { merged[k] = l; push.push(l); continue; }
+      if (String(r[tfield] || "").trim() > String(l[tfield] || "").trim()) merged[k] = r;
+      else {
+        merged[k] = l;
+        if (rowSig(l, fields) !== rowSig(r, fields)) push.push(l);
+      }
+    }
+    return { merged: merged, push: push };
+  }
+
+  function applyMergedRows(entries, custom, deleted) {
+    ENTRIES = {}; META = {}; CUSTOM = {}; DELETED = {};
+    entries.forEach((e) => {
+      if (e.value === null || e.value === undefined || e.value === "") return;
+      const k = ck(e.lot, e.row, e.task, e.field);
+      ENTRIES[k] = e.value;
+      if (e.updated_by || e.updated_at) META[k] = { u: e.updated_by || "", t: e.updated_at || "" };
+    });
+    custom.forEach((c) => {
+      (CUSTOM[c.lot] || (CUSTOM[c.lot] = {}))[c.row_num] =
+        { designation: c.designation, niveau: c.niveau || "", created_by: c.created_by || "", created_at: c.created_at || "" };
+    });
+    deleted.forEach((d) => {
+      (DELETED[d.lot] || (DELETED[d.lot] = {}))[d.row_num] =
+        { deleted_by: d.deleted_by || "", deleted_at: d.deleted_at || "" };
+    });
+    persist();
+  }
+
+  async function pullMerge() {
+    const local = dumpAll();
+    const remE = await selectAll("entries");
+    const remC = await selectAll("custom_locals");
+    const remD = await selectAll("deleted_locals");
+
+    const e = mergeRows(local.entries, remE, idEntry, "updated_at", ENTRY_FIELDS);
+    const c = mergeRows(local.custom_locals, remC, idSmall, "created_at", CUSTOM_FIELDS);
+    const d = mergeRows(local.deleted_locals, remD, idSmall, "deleted_at", DELETED_FIELDS);
+
+    // Un local ne peut pas être à la fois « ajouté » et « supprimé » :
+    // la date la plus récente tranche.
+    const dropC = [], dropD = [];
+    for (const k in c.merged) {
+      if (!d.merged[k]) continue;
+      const cd = d.merged[k];
+      if (String(cd.deleted_at || "").trim() >= String(c.merged[k].created_at || "").trim()) {
+        delete c.merged[k];
+        dropC.push({ lot: cd.lot, row_num: cd.row_num });
+      } else {
+        delete d.merged[k];
+        dropD.push({ lot: cd.lot, row_num: cd.row_num });
+      }
+    }
+
+    // Les cellules des locaux masqués/supprimés ne sont pas conservées.
+    const hidden = {};
+    for (const k in d.merged) { const r = d.merged[k]; hidden[r.lot + "|" + r.row_num] = true; }
+    for (const k in e.merged) {
+      const r = e.merged[k];
+      if (hidden[r.lot + "|" + r.row]) delete e.merged[k];
+    }
+
+    const pushE = e.push.filter((r) => !hidden[r.lot + "|" + r.row]);
+    const pushC = c.push.filter((r) => c.merged[idSmall(r)]);
+    const pushD = d.push.filter((r) => d.merged[idSmall(r)]);
+
+    const before = localCounts();
+    applyMergedRows(Object.keys(e.merged).map((k) => e.merged[k]),
+      Object.keys(c.merged).map((k) => c.merged[k]),
+      Object.keys(d.merged).map((k) => d.merged[k]));
+    const after = localCounts();
+
+    const op = {};
+    if (pushE.length) op.entries_upserts = pushE;
+    if (pushC.length) op.custom_locals_upserts = pushC;
+    if (pushD.length) op.deleted_locals_upserts = pushD;
+    if (dropC.length) op.custom_locals_deletes = dropC;
+    if (dropD.length) op.deleted_locals_deletes = dropD;
+    if (Object.keys(op).length) enqueueCloud(op);
+
+    const changed = before.entries !== after.entries ||
+      before.custom_locals !== after.custom_locals ||
+      before.deleted_locals !== after.deleted_locals;
+    return { changed: changed, pushed: pushE.length + pushC.length + pushD.length, total: after.entries };
+  }
+
+  let syncing = false;
+  async function syncNow(opts) {
+    opts = opts || {};
+    if (syncing) return null;
+    if (!navigator.onLine) return null;
+    if (Date.now() < breakerUntil) return null;
+    syncing = true;
+    let res = null;
+    try {
+      await flushCloud();          // 1. envoyer les changements en attente
+      res = await pullMerge();     // 2. lire + fusionner ce qui vient d'ailleurs
+      await flushCloud();          // 3. renvoyer ce que l'on a de plus récent
+      CLOUD_STATE.last_ok = nowIso();
+      CLOUD_STATE.last_error = null;
+      saveCloudState();
+      if (res.changed && opts.refresh !== false) {
+        const h = location.hash || "#/";
+        if (h === "#/" || h === "" || h === "#/cloud") render();
+      }
+    } catch (err) {
+      CLOUD_STATE.last_error = nowIso() + " — " + err.message;
+      saveCloudState();
+      breakerUntil = Date.now() + BREAKER_MS;
+    } finally {
+      syncing = false;
+      updateNetUI();
+    }
+    return res;
+  }
   // Au tout premier lancement, si l'appareil est vide, on récupère la
   // sauvegarde en ligne (utile après une réinstallation ou un changement
   // de téléphone). Ne fait rien si des données existent déjà ou hors ligne.
@@ -865,15 +997,10 @@
       if (c.entries || c.custom_locals || c.deleted_locals) { lsSet("cavally.initialized", nowIso()); return false; }
       if (!navigator.onLine) return false;
       const nb = await suiCount("entries");
-      if (!nb) { lsSet("cavally.initialized", nowIso()); return false; }
-      const payload = {
-        entries: await selectAll("entries"),
-        custom_locals: await selectAll("custom_locals"),
-        deleted_locals: await selectAll("deleted_locals"),
-      };
-      loadAll(payload, true);
+      const res = await pullMerge();
+      await flushCloud();
       lsSet("cavally.initialized", nowIso());
-      toast("Données restaurées depuis la sauvegarde en ligne (" + nb + " cellules)", "ok");
+      if (nb) toast("Données récupérées depuis la sauvegarde en ligne (" + nb + " cellules)", "ok");
       return true;
     } catch (e) { return false; }
   }
@@ -1233,39 +1360,65 @@
     });
   }
 
+  /* Prépare la liste des cellules à écrire pour un import.
+     mode "complete" (défaut) : ne remplit que les cases vides — rien n'est écrasé.
+     mode "replace" : met à jour toutes les cases présentes dans le fichier. */
+  function planImport(updates, mode) {
+    if (mode === "replace") return { updates: updates, skipped: 0 };
+    let skipped = 0;
+    const keep = updates.filter((u) => {
+      const cur = entGet(u.lot, parseInt(u.row, 10) || u.row, u.task, u.field);
+      if (cur !== undefined && cur !== null && cur !== "") { skipped++; return false; }
+      return normalize(u.field, u.value) !== null;
+    });
+    return { updates: keep, skipped: skipped };
+  }
+
   function viewImport() {
     setActiveNav("import");
     let html = "<h1>Importer un fichier Excel</h1>" +
       '<p class="sub">Choisissez un classeur déjà rempli (même modèle que « SUIVI TRAVAUX CAVALLY »). Les avancements, ' +
-      "statuts et observations des 4 feuilles de lots seront fusionnés dans la base de cet appareil.</p>" +
+      "statuts et observations des 4 feuilles de lots seront <strong>ajoutés</strong> à la base de cet appareil.</p>" +
       '<div class="grid cols-2"><div class="card">' +
       '<label class="small muted">Fichier .xlsx</label><br>' +
       '<input id="impFile" type="file" accept=".xlsx,.xlsm" style="margin:10px 0 16px">' +
-      '<p class="small muted">Les feuilles reconnues sont : AVANCEMENT PBS, AVANCEMENT CVC, AVCT CFO, AVANCEMENT CFA-SSI. ' +
-      "Les formules de synthèse du fichier ne sont pas reprises (elles sont recalculées automatiquement à l'export).</p>" +
-      '<button class="btn primary" id="impBtn">Importer et fusionner</button>' +
+      '<div class="card tight" style="margin:0 0 16px"><div class="small" style="margin-bottom:8px">' +
+      "<strong>Que faire des cases déjà remplies ?</strong></div>" +
+      '<label class="small" style="display:block;margin-bottom:8px">' +
+      '<input type="radio" name="impMode" value="complete" checked> ' +
+      "<strong>Compléter</strong> — ne remplir que les cases vides (rien n'est écrasé)</label>" +
+      '<label class="small" style="display:block">' +
+      '<input type="radio" name="impMode" value="replace"> ' +
+      "Mettre à jour — remplacer aussi les valeurs déjà saisies</label></div>" +
+      '<button class="btn primary" id="impBtn">Importer</button>' +
       '<div id="impMsg" class="small" style="margin-top:10px"></div></div>' +
       '<div class="card"><strong>Bon à savoir</strong><ul class="small">' +
-      "<li>L'import <strong>écrase</strong> les valeurs existantes pour les cellules présentes dans le fichier.</li>" +
-      "<li>Les cellules vides du fichier ne suppriment rien.</li>" +
+      "<li>Par défaut, l'import <strong>ne supprime ni n'écrase rien</strong> : il complète les cases vides.</li>" +
+      "<li>Les cases vides du fichier ne modifient rien.</li>" +
       "<li>Les niveaux/locaux doivent correspondre au modèle (les lignes sont repérées par numéro de ligne).</li>" +
-      '<li>Pour repartir du modèle vierge : <a href="#/export">générez puis réimportez</a>.</li>' +
+      "<li>Le fichier est ensuite synchronisé automatiquement avec le site et les autres appareils.</li>" +
+      "<li>Les formules de synthèse du fichier ne sont pas reprises (recalculées à l'export).</li>" +
       "</ul></div></div>";
     setView(html);
 
     $("#impBtn").addEventListener("click", async () => {
       const f = $("#impFile").files[0];
       const msg = $("#impMsg");
+      const checked = $('input[name="impMode"]:checked');
+      const mode = checked ? checked.value : "complete";
       if (!f) { msg.style.color = "var(--bad)"; msg.textContent = "Aucun fichier sélectionné."; return; }
       msg.style.color = "var(--muted)";
       msg.textContent = "Lecture du fichier…";
       try {
         const ab = await f.arrayBuffer();
-        const updates = parseImportWorkbook(ab);
-        const n = saveCells(updates, getUser() || "Anonyme");
+        const plan = planImport(parseImportWorkbook(ab), mode);
+        const n = saveCells(plan.updates, getUser() || "Anonyme");
         msg.style.color = "var(--ok)";
-        msg.textContent = "Import réussi : " + n + " cellule(s) mise(s) à jour.";
+        msg.textContent = mode === "replace"
+          ? ("Import réussi : " + n + " cellule(s) mise(s) à jour.")
+          : ("Import réussi : " + n + " case(s) complétée(s), " + plan.skipped + " déjà remplie(s) conservée(s).");
         toast("Import réussi : " + n + " cellule(s)", "ok");
+        syncNow();
       } catch (e) {
         msg.style.color = "var(--bad)";
         msg.textContent = "Erreur pendant l'import : " + e.message;
@@ -1320,23 +1473,28 @@
 
   function viewCloud() {
     setActiveNav("cloud");
-    let html = "<h1>Sauvegarde en ligne</h1>" +
-      '<p class="sub">Vos données sont enregistrées sur cet appareil. Lorsqu\'un réseau est disponible, elles sont aussi ' +
-      "copiées dans la base en ligne (Supabase) — sécurité en cas de perte du téléphone.</p>" +
+    let html = "<h1>Sauvegarde et synchronisation</h1>" +
+      '<p class="sub">Vos données sont enregistrées sur cet appareil. Elles sont aussi <strong>synchronisées ' +
+      "automatiquement</strong> avec le site et vos autres appareils (téléphone, ordinateur) via la base en ligne : " +
+      "ce que vous saisissez ici apparaît partout, et inversement.</p>" +
       '<div class="card"><div id="cloudStatus" class="small">Chargement…</div>' +
       '<div class="toolbar" style="margin-top:14px">' +
-      '<button class="btn primary" id="pushBtn">☁ Sauvegarder maintenant</button>' +
-      '<button class="btn" id="restoreMerge">⬇ Restaurer (fusionner)</button>' +
-      '<button class="btn danger" id="restoreReplace">⬇ Restaurer (remplacer)</button></div>' +
+      '<button class="btn primary" id="syncBtn">🔄 Synchroniser maintenant</button>' +
+      '<button class="btn" id="pushBtn">☁ Créer un instantané</button></div>' +
       '<div id="cloudMsg" class="small" style="margin-top:10px"></div></div>' +
+      '<h2>Récupération des données</h2><div class="card">' +
+      '<p class="small muted">Utile après une réinstallation. La fusion ne supprime jamais les données les plus récentes.</p>' +
+      '<div class="toolbar">' +
+      '<button class="btn" id="restoreMerge">⬇ Fusionner la copie en ligne</button>' +
+      '<button class="btn danger" id="restoreReplace">⬇ Remplacer par la copie en ligne</button></div></div>' +
       '<h2>Derniers instants sauvegardés</h2><div class="card"><div id="backupList" class="small muted">Chargement…</div></div>';
     setView(html);
 
     async function refresh() {
-      const st = $("#cloudStatus"), bl = $("#backupList"), msg = $("#cloudMsg");
+      const st = $("#cloudStatus"), bl = $("#backupList");
       const local = localCounts();
       let cloud = { entries: "—", custom_locals: "—", deleted_locals: "—" };
-      let online = navigator.onLine;
+      const online = navigator.onLine;
       try {
         for (const t of ["entries", "custom_locals", "deleted_locals"]) cloud[t] = await suiCount(t);
       } catch (e) { cloud = { entries: "?", custom_locals: "?", deleted_locals: "?" }; }
@@ -1344,8 +1502,8 @@
         "<div><strong>Sur cet appareil :</strong> " + local.entries + " cellules · " + local.custom_locals + " locaux ajoutés · " + local.deleted_locals + " locaux masqués</div>" +
         "<div style='margin-top:4px'><strong>En ligne :</strong> " + cloud.entries + " cellules · " + cloud.custom_locals + " locaux ajoutés · " + cloud.deleted_locals + " locaux masqués</div>" +
         "<div style='margin-top:4px'><strong>En attente d'envoi :</strong> " + QUEUE.length + " changement(s)</div>" +
-        "<div style='margin-top:4px'><strong>Dernier succès :</strong> " + (CLOUD_STATE.last_ok || "—") + " &nbsp; <strong>Dernière erreur :</strong> " + (CLOUD_STATE.last_error || "—") + "</div>" +
-        "<div style='margin-top:4px'>" + (online ? "🟢 en ligne" : "🟠 hors ligne") + "</div>";
+        "<div style='margin-top:4px'><strong>Dernière synchro réussie :</strong> " + (CLOUD_STATE.last_ok || "—") + " &nbsp; <strong>Dernière erreur :</strong> " + (CLOUD_STATE.last_error || "—") + "</div>" +
+        "<div style='margin-top:4px'>" + (online ? "🟢 en ligne — synchronisation automatique active" : "🟠 hors ligne — les changements partiront au retour du réseau") + "</div>";
       try {
         const list = await recentBackups(10);
         if (list.length) {
@@ -1355,21 +1513,33 @@
             "</tbody></table>";
         } else bl.innerHTML = '<span class="muted">Aucun instantané pour l\'instant.</span>';
       } catch (e) { bl.innerHTML = '<span class="muted">Liste indisponible (hors ligne ?).</span>'; }
-      return msg;
     }
     refresh();
 
+    $("#syncBtn").addEventListener("click", async () => {
+      const msg = $("#cloudMsg");
+      msg.style.color = "var(--muted)"; msg.textContent = "Synchronisation en cours…";
+      const r = await syncNow({ refresh: false });
+      if (!navigator.onLine) { msg.style.color = "var(--bad)"; msg.textContent = "Hors ligne — réessayez au retour du réseau."; return; }
+      if (!r) { msg.style.color = "var(--bad)"; msg.textContent = "Synchronisation impossible pour le moment."; return; }
+      msg.style.color = "var(--ok)";
+      msg.textContent = "Synchronisé : " + r.total + " cellules sur cet appareil" +
+        (r.pushed ? ", " + r.pushed + " envoyée(s) depuis ici" : "") + ".";
+      refresh();
+    });
+
     $("#pushBtn").addEventListener("click", async () => {
       const msg = $("#cloudMsg");
-      msg.style.color = "var(--muted)"; msg.textContent = "Sauvegarde en cours…";
+      msg.style.color = "var(--muted)"; msg.textContent = "Création de l'instantané…";
       try {
         const r = await cloudFullPush();
         msg.style.color = "var(--ok)";
-        msg.textContent = "Sauvegarde réussie : " + r.entries + " cellules, " + r.custom_locals + " locaux ajoutés, " + r.deleted_locals + " locaux masqués (" + r.at + ").";
-        toast("Sauvegarde en ligne réussie", "ok");
+        msg.textContent = "Instantané créé : " + r.entries + " cellules, " + r.custom_locals + " locaux ajoutés, " + r.deleted_locals + " locaux masqués (" + r.at + ").";
+        toast("Instantané en ligne créé", "ok");
       } catch (e) { msg.style.color = "var(--bad)"; msg.textContent = "Échec : " + e.message; }
       refresh();
     });
+
     async function doRestore(mode) {
       const msg = $("#cloudMsg");
       if (mode === "replace" && !confirm("Remplacer TOUTES les données de cet appareil par la copie en ligne ?")) return;
@@ -1379,6 +1549,7 @@
         msg.style.color = "var(--ok)";
         msg.textContent = "Restauration réussie (" + mode + ") : " + c.entries + " cellules.";
         toast("Restauration réussie", "ok");
+        syncNow({ refresh: false });
       } catch (e) { msg.style.color = "var(--bad)"; msg.textContent = "Échec : " + e.message; }
       refresh();
     }
@@ -1398,12 +1569,12 @@
       '<p class="small muted">Chaque champ est enregistré automatiquement sur l\'appareil.</p>' +
       "<h3>3. Statuts</h3><ul><li>Non démarré · En cours · Terminé · Bloqué · Non conforme · À vérifier</li></ul>" +
       "<p>Le statut global d'un local et sa moyenne sont recalculés automatiquement à partir des tâches.</p>" +
-      "<h3>4. Importer</h3><p>Page <em>Importer</em> : choisissez un classeur rempli (même modèle) pour fusionner les données.</p>" +
+      "<h3>4. Importer</h3><p>Page <em>Importer</em> : choisissez un classeur rempli (même modèle). Par défaut l'import <strong>complète</strong> les cases vides — il n'écrase jamais une saisie déjà faite.</p>" +
       "<h3>5. Générer le fichier Excel</h3><p>Page <em>Exporter</em> : le classeur complet, identique au modèle, rempli avec vos saisies. Sur téléphone, utilisez « Partager » pour l'enregistrer ou l'envoyer.</p>" +
       "<h3>6. Travailler sans réseau</h3><ul>" +
       "<li>Le voyant en haut à droite affiche <strong>hors ligne</strong> et le nombre de changements en attente.</li>" +
-      "<li>Tout est <strong>conservé sur l'appareil</strong> et <strong>sauvegardé automatiquement en ligne</strong> dès que le réseau revient.</li></ul>" +
-      "<h3>7. Sauvegarde en ligne</h3><p>Page <em>Sauvegarde</em> : voyez l'état, forcez une sauvegarde complète, ou restaurez vos données depuis le cloud.</p>" +
+      "<li>Tout est <strong>conservé sur l'appareil</strong> et <strong>synchronisé automatiquement</strong> dès que le réseau revient.</li></ul>" +
+      "<h3>7. Synchronisation automatique</h3><p>Vos saisies partent en ligne et celles des autres appareils (site web, autres téléphones, ordinateurs) arrivent ici <strong>sans rien faire</strong>. En cas de conflit, la modification la plus récente est conservée ; rien n'est écrasé en bloc. La page <em>Sauvegarde</em> permet de voir l'état, de synchroniser tout de suite ou de créer un instantané daté.</p>" +
       "</div></div>");
   }
 
@@ -1496,14 +1667,21 @@
       u.value = getUser();
       u.addEventListener("change", () => { setUser(u.value.trim()); toast("Utilisateur : " + (u.value.trim() || "Anonyme"), "ok"); });
     }
-    // réseau
+    // réseau + synchronisation automatique
     updateNetUI();
     window.addEventListener("online", () => { updateNetUI(); flushCloud(); });
     window.addEventListener("offline", updateNetUI);
-    window.addEventListener("focus", flushCloud);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) flushCloud(); });
-    setInterval(flushCloud, 20000);
+    window.addEventListener("focus", () => syncNow());
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) syncNow(); });
+    setInterval(() => syncNow(), 15000);        // synchronisation régulière
     setInterval(updateNetUI, 5000);
+    // Retour au premier plan (Android / iOS)
+    try {
+      const Cap = window.Capacitor;
+      if (Cap && Cap.Plugins && Cap.Plugins.App && Cap.Plugins.App.addListener) {
+        Cap.Plugins.App.addListener("appStateChange", (st) => { if (st && st.isActive) syncNow(); });
+      }
+    } catch (e) {}
     window.addEventListener("hashchange", render);
   }
 
@@ -1528,7 +1706,8 @@
     updateNetUI();
     // au tout premier lancement : récupération automatique de la sauvegarde en ligne
     maybeInitialRestore().then((restored) => {
-      if (restored) { flushCloud(); render(); }
+      syncNow();
+      if (restored) render();
     });
     // service worker (hors-ligne / installable)
     if ("serviceWorker" in navigator) {
@@ -1541,7 +1720,10 @@
     setStructure(s) { STRUCT = s; },
     setTemplate(ab) { TEMPLATE_AB = ab; },
     setData(e, c, d) { ENTRIES = e || {}; CUSTOM = c || {}; DELETED = d || {}; },
-    getData() { return { ENTRIES: ENTRIES, CUSTOM: CUSTOM, DELETED: DELETED }; },
+    getData() { return { ENTRIES: ENTRIES, CUSTOM: CUSTOM, DELETED: DELETED, META: META }; },
+    pullMerge: pullMerge, syncNow: syncNow, mergeRows: mergeRows,
+    applyMergedRows: applyMergedRows, planImport: planImport,
+    loadCloud: loadCloud, flushCloud: flushCloud,
     buildSummary, allDataForExport, buildExport, parseImportWorkbook, effectiveLot,
     saveCells, addCustomLocal, editLocal, deleteCustomLocal,
     normalize, localCounts, dumpAll, loadAll, ck,

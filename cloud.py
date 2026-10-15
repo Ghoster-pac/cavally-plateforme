@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from datetime import datetime
 
@@ -46,6 +47,15 @@ _last_ok = None
 _last_error = None
 _disabled_until = 0.0
 _BREAKER_SECONDS = 60
+
+# Etat de la synchronisation automatique locale <-> en ligne.
+_sync_lock = threading.Lock()
+_sync_running = False
+_last_sync = None            # date lisible du dernier cycle termine
+_last_sync_ts = 0.0          # horodatage interne (throttle)
+_last_backup_ts = 0.0        # dernier instantane envoye automatiquement
+SYNC_EVERY = float(os.environ.get("CAVALLY_SYNC_EVERY") or "20")   # 2. synchronisation
+BACKUP_EVERY = float(os.environ.get("CAVALLY_BACKUP_EVERY") or "900")  # 15 min
 
 _PAGE = 1000  # taille des pages de lecture
 _BATCH = 500  # taille des lots d'ecriture
@@ -73,6 +83,7 @@ def status() -> dict:
         "url": SUPABASE_URL,
         "last_ok": _last_ok,
         "last_error": _last_error,
+        "last_sync": _last_sync,
         "breaker": time.time() < _disabled_until,
     }
 
@@ -256,8 +267,8 @@ def full_push() -> dict:
                      json_body=entries[i:i + _BATCH],
                      prefer="resolution=merge-duplicates,return=minimal")
 
-        # 2) Tables de locaux : on les remet exactement a l'image du local
-        #    (ajout des manquants + suppression des lignes obsoletes).
+        # 2) Tables de locaux : ajout / mise a jour (jamais de suppression :
+        #    les suppressions voyagent par les pierres tombales).
         _sync_small_table("custom_locals", customs, ("lot", "row_num"))
         _sync_small_table("deleted_locals", deleted, ("lot", "row_num"))
 
@@ -288,7 +299,13 @@ def full_push() -> dict:
 
 
 def _sync_small_table(table: str, rows: list, key_fields: tuple):
-    """Met une petite table cloud exactement en phase avec les lignes locales."""
+    """Ajoute/actualise les petites tables cloud (sans jamais supprimer).
+
+    Les suppressions ne doivent plus voyager en « delete en masse » : elles
+    passent par les pierres tombales (table deleted_locals), seules capables de
+    propager une suppression sans effacer par erreur les lignes ajoutees par un
+    autre appareil.
+    """
     conflict = ",".join(key_fields)
     if rows:
         for i in range(0, len(rows), _BATCH):
@@ -296,11 +313,6 @@ def _sync_small_table(table: str, rows: list, key_fields: tuple):
                      params={"on_conflict": conflict},
                      json_body=rows[i:i + _BATCH],
                      prefer="resolution=merge-duplicates,return=minimal")
-    local_keys = {tuple(str(r[k]) for k in key_fields) for r in rows}
-    for crow in _select_all(table):
-        if tuple(str(crow[k]) for k in key_fields) not in local_keys:
-            params = {k: "eq.%s" % crow[k] for k in key_fields}
-            _delete(table, params)
 
 
 def _truncate_backups(keep: int = 10):
@@ -356,8 +368,245 @@ def restore(mode: str = "replace") -> dict:
         return {"ok": False, "error": str(exc)}
 
 
+# ---------------------------------------------------------------------------
+# Synchronisation bidirectionnelle (fusion « derniere ecriture gagne »)
+#
+# La copie en ligne n'est plus seulement une sauvegarde : elle sert de point de
+# rendez-vous entre le serveur, les telephones et les ordinateurs. A chaque
+# cycle, on lit la copie en ligne, on la fusionne avec les donnees locales
+# (la date d'ecriture la plus recente gagne), on reecrit le resultat en local
+# et on ne renvoie en ligne que ce qui a change.
+# ---------------------------------------------------------------------------
+
+_ENTRY_FIELDS = ("lot", "row", "task", "field", "value", "updated_by", "updated_at")
+_CUSTOM_FIELDS = ("lot", "row_num", "designation", "niveau", "created_by", "created_at")
+_DELETED_FIELDS = ("lot", "row_num", "deleted_by", "deleted_at")
+
+
+def _t(v) -> str:
+    """Horodatage comparable (format 'AAAA-MM-JJ HH:MM:SS')."""
+    return str(v or "").strip()
+
+
+def _ek(e: dict):
+    return (str(e.get("lot")), str(int(e.get("row"))), str(e.get("task")),
+            str(e.get("field")))
+
+
+def _sk(r: dict):
+    return (str(r.get("lot")), str(int(r.get("row_num"))))
+
+
+def _row_key(row: dict, fields) -> tuple:
+    return tuple("" if row.get(f) is None else str(row.get(f)) for f in fields)
+
+
+def _merge(local: dict, remote: dict, tfield: str, fields) -> tuple:
+    """Fusionne deux dictionnaires {cle: ligne}. Renvoie (fusion, a_pousser)."""
+    merged = {}
+    push = []
+    for k in set(local) | set(remote):
+        l = local.get(k)
+        r = remote.get(k)
+        if l is None:
+            merged[k] = r
+            continue
+        if r is None:
+            merged[k] = l
+            push.append(l)
+            continue
+        if _t(r.get(tfield)) > _t(l.get(tfield)):
+            merged[k] = r          # la version en ligne est plus recente
+        else:
+            merged[k] = l
+            if _row_key(l, fields) != _row_key(r, fields):
+                push.append(l)      # divergence : on impose la version locale
+    return merged, push
+
+
+def _chunks(rows: list, size: int):
+    for i in range(0, len(rows), size):
+        yield rows[i:i + size]
+
+
+def _upsert_rows(table: str, rows: list, conflict: str):
+    for chunk in _chunks(rows, _BATCH):
+        _request("POST", "/" + table,
+                 params={"on_conflict": conflict},
+                 json_body=chunk,
+                 prefer="resolution=merge-duplicates,return=minimal")
+
+
+def sync() -> dict:
+    """Fusionne la base locale et la copie en ligne dans les deux sens."""
+    import db
+
+    global _last_error, _last_sync, _last_sync_ts
+    if not _configured():
+        return {"ok": False, "error": "Sauvegarde non configuree."}
+    try:
+        rem_e = {_ek(e): e for e in _select_all("entries")}
+        rem_c = {_sk(c): c for c in _select_all("custom_locals")}
+        rem_d = {_sk(d): d for d in _select_all("deleted_locals")}
+    except Exception as exc:  # noqa
+        _last_error = "%s (lecture en ligne)" % exc
+        return {"ok": False, "error": str(exc)}
+
+    local = db.dump_all()
+    loc_e = {_ek(e): e for e in local["entries"]}
+    loc_c = {_sk(c): c for c in local["custom_locals"]}
+    loc_d = {_sk(d): d for d in local["deleted_locals"]}
+
+    merged_e, _ = _merge(loc_e, rem_e, "updated_at", _ENTRY_FIELDS)
+    merged_c, _ = _merge(loc_c, rem_c, "created_at", _CUSTOM_FIELDS)
+    merged_d, _ = _merge(loc_d, rem_d, "deleted_at", _DELETED_FIELDS)
+
+    # Une ligne ne peut pas etre a la fois « ajoutee » et « supprimee » :
+    # la date la plus recente tranche.
+    drop_c_remote, drop_d_remote = [], []
+    for k in set(merged_c) & set(merged_d):
+        c, d = merged_c[k], merged_d[k]
+        if _t(d.get("deleted_at")) >= _t(c.get("created_at")):
+            del merged_c[k]
+            drop_c_remote.append(k)
+        else:
+            del merged_d[k]
+            drop_d_remote.append(k)
+
+    # Les cellules des locaux masques/supprimes ne sont pas conservees.
+    hidden = set(merged_d.keys())
+    for k in list(merged_e):
+        if (k[0], k[1]) in hidden:
+            del merged_e[k]
+
+    # Filet de securite : on relit la base locale juste avant d'ecrire, au cas
+    # ou une saisie serait arrivee pendant la lecture de la copie en ligne.
+    local2 = db.dump_all()
+    loc_e2 = {_ek(e): e for e in local2["entries"]}
+    loc_c2 = {_sk(c): c for c in local2["custom_locals"]}
+    loc_d2 = {_sk(d): d for d in local2["deleted_locals"]}
+    merged_e, _ = _merge(loc_e2, merged_e, "updated_at", _ENTRY_FIELDS)
+    merged_c, _ = _merge(loc_c2, merged_c, "created_at", _CUSTOM_FIELDS)
+    merged_d, _ = _merge(loc_d2, merged_d, "deleted_at", _DELETED_FIELDS)
+    for k in list(merged_e):
+        if (k[0], k[1]) in set(merged_d.keys()):
+            del merged_e[k]
+
+    try:
+        db.apply_merge(list(merged_e.values()), list(merged_c.values()),
+                       list(merged_d.values()))
+    except Exception as exc:  # noqa
+        _last_error = "%s (ecriture locale)" % exc
+        return {"ok": False, "error": str(exc)}
+
+    # Ce qui doit etre renvoye en ligne = tout ce qui differe de la copie lue.
+    def _to_push(merged, remote, fields):
+        out = []
+        for k, r in merged.items():
+            if k not in remote or _row_key(r, fields) != _row_key(remote[k], fields):
+                out.append(r)
+        return out
+
+    push_e = _to_push(merged_e, rem_e, _ENTRY_FIELDS)
+    push_c = _to_push(merged_c, rem_c, _CUSTOM_FIELDS)
+    push_d = _to_push(merged_d, rem_d, _DELETED_FIELDS)
+
+    pushed = 0
+    try:
+        if push_e:
+            _upsert_rows("entries", push_e, "lot,row,task,field")
+            pushed += len(push_e)
+        if push_c:
+            _upsert_rows("custom_locals", push_c, "lot,row_num")
+            pushed += len(push_c)
+        if push_d:
+            _upsert_rows("deleted_locals", push_d, "lot,row_num")
+            pushed += len(push_d)
+        for k in drop_c_remote:
+            _delete("custom_locals", {"lot": "eq.%s" % k[0], "row_num": "eq.%s" % k[1]})
+        for k in drop_d_remote:
+            _delete("deleted_locals", {"lot": "eq.%s" % k[0], "row_num": "eq.%s" % k[1]})
+    except Exception as exc:  # noqa
+        _last_error = "%s (envoi)" % exc
+        return {"ok": False, "error": str(exc), "merged": len(merged_e)}
+
+    _last_sync = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _last_sync_ts = time.time()
+    _request_safe_sync_meta()
+    return {
+        "ok": True, "at": _last_sync,
+        "entries": len(merged_e), "custom_locals": len(merged_c),
+        "deleted_locals": len(merged_d), "pushed": pushed, "removed": 0,
+    }
+
+
+def _request_safe_sync_meta():
+    try:
+        _request("POST", "/sync_meta",
+                 params={"on_conflict": "key"},
+                 json_body=[{"key": "last_sync", "value": _last_sync,
+                             "updated_at": datetime.now().isoformat()}],
+                 prefer="resolution=merge-duplicates,return=minimal")
+    except Exception:
+        pass
+
+
+def maybe_sync(background: bool = True) -> bool:
+    """Lance une synchronisation si le delai minimum est ecoule."""
+    global _last_sync_ts
+    if not enabled():
+        return False
+    if _sync_running:
+        return False
+    if time.time() - _last_sync_ts < SYNC_EVERY:
+        return False
+    # on bloque tout de suite la fenetre : evite que plusieurs requetes
+    # simultanees ne lancent plusieurs fils de synchronisation.
+    _last_sync_ts = time.time()
+    if background:
+        threading.Thread(target=_sync_worker, daemon=True).start()
+        return True
+    _sync_worker()
+    return True
+
+
+def sync_now(snapshot: bool = True) -> dict:
+    """Synchronisation immediate, en respectant le verrou (bloquant)."""
+    global _sync_running, _last_sync_ts, _last_error
+    if not enabled():
+        return {"ok": False, "error": "Sauvegarde en ligne indisponible."}
+    with _sync_lock:
+        if _sync_running:
+            return {"ok": False, "error": "Synchronisation deja en cours."}
+        _sync_running = True
+    try:
+        res = sync()
+        if res.get("ok") and snapshot and time.time() - _last_backup_ts > BACKUP_EVERY:
+            backup()
+        return res
+    except Exception as exc:  # noqa
+        _last_error = "%s (synchronisation)" % exc
+        return {"ok": False, "error": str(exc)}
+    finally:
+        with _sync_lock:
+            _sync_running = False
+        _last_sync_ts = time.time()
+
+
+def _sync_worker():
+    sync_now(snapshot=True)
+
+
+def backup() -> dict:
+    """Force la creation d'un instantane date en ligne."""
+    global _last_backup_ts
+    res = full_push()
+    if res.get("ok"):
+        _last_backup_ts = time.time()
+    return res
+
+
 def cloud_status() -> dict:
-    """Etat combine local / en ligne."""
     import db
 
     local = db.count_all()

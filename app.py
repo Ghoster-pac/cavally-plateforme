@@ -22,6 +22,20 @@ STATUS_LIST = db.STATUS_LIST
 db.init_db()
 
 
+@app.before_request
+def _auto_cloud_sync():
+    """Synchronisation automatique (fusion locale <-> en ligne) en arriere-plan.
+
+    Lancee au maximum une fois toutes les CAVALLY_SYNC_EVERY secondes, sans
+    jamais ralentir la page : le travail se fait dans un fil d'execution.
+    """
+    try:
+        if not request.path.startswith("/static"):
+            cloud.maybe_sync()
+    except Exception:  # noqa
+        pass
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -112,13 +126,21 @@ def import_page():
         if not f or not f.filename:
             flash("Aucun fichier selectionne.", "error")
             return redirect(url_for("import_page"))
+        mode = (request.form.get("mode") or "complete").strip().lower()
+        if mode not in ("complete", "replace"):
+            mode = "complete"
         tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
         f.save(tmp.name)
         tmp.close()
         try:
             parsed = E.parse_import(tmp.name, structure())
-            n = db.import_cells(parsed, structure(), current_user())
-            flash(f"Import reussi : {n} cellule(s) mise(s) a jour.", "ok")
+            res = db.import_cells(parsed, structure(), current_user(), mode=mode)
+            if mode == "complete":
+                flash("Import reussi : %d cellule(s) completee(s), %d deja remplie(s) "
+                      "conservee(s)." % (res["saved"], res["skipped"]), "ok")
+            else:
+                flash("Import reussi : %d cellule(s) mise(s) a jour." % res["saved"], "ok")
+            cloud.maybe_sync()
         except Exception as exc:  # noqa
             flash(f"Erreur pendant l'import : {exc}", "error")
         finally:
@@ -289,6 +311,13 @@ def api_cloud_status():
 @app.route("/api/cloud/push", methods=["POST"])
 def api_cloud_push():
     res = cloud.full_push()
+    return jsonify(res), (200 if res.get("ok") else 502)
+
+
+@app.route("/api/cloud/sync", methods=["POST"])
+def api_cloud_sync():
+    """Synchronisation immediate (fusion locale <-> en ligne)."""
+    res = cloud.sync_now(snapshot=True)
     return jsonify(res), (200 if res.get("ok") else 502)
 
 

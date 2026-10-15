@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Sauvegarde en ligne — Suivi CAVALLY{% endblock %}
 {% block content %}
-<h1>Sauvegarde en ligne</h1>
-<p class="sub">Les données saisies sont enregistrées sur le serveur <strong>et</strong> recopiées
-dans une seconde base en ligne (Supabase / PostgreSQL). En cas de perte du serveur, tout peut
-être restauré depuis cette copie.</p>
+<h1>Sauvegarde en ligne et synchronisation</h1>
+<p class="sub">Les données sont enregistrées sur le serveur <strong>et</strong> recopiées dans une seconde base
+en ligne (Supabase / PostgreSQL). Cette base sert aussi de <strong>point de rendez-vous</strong> entre le site,
+les téléphones et les ordinateurs : chaque appareil y dépose ses saisies et y récupère celles des autres,
+<strong>automatiquement</strong>.</p>
 
 {% if not info.configured %}
   <div class="flash error">La sauvegarde en ligne n'est pas configurée (variables SUPABASE_URL / SUPABASE_KEY).</div>
@@ -25,6 +26,7 @@ dans une seconde base en ligne (Supabase / PostgreSQL). En cas de perte du serve
       {% else %}
         Aucune erreur signalée.
       {% endif %}
+      <div>Dernière synchronisation : <strong id="lastSync">{{ info.last_sync or "—" }}</strong></div>
     </div>
 
     <table class="small" style="width:100%;border-collapse:collapse;margin-top:14px">
@@ -54,11 +56,13 @@ dans une seconde base en ligne (Supabase / PostgreSQL). En cas de perte du serve
       </table>
 
     <div style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn primary" id="btnPush" type="button">☁ Sauvegarder maintenant</button>
+      <button class="btn primary" id="btnSync" type="button">🔄 Synchroniser maintenant</button>
+      <button class="btn" id="btnPush" type="button">☁ Nouvel instantané</button>
       <button class="btn ghost" id="btnRefresh" type="button">↻ Actualiser l'état</button>
     </div>
-    <p class="small muted" style="margin-top:10px">La sauvegarde automatique recopie chaque saisie
-      au fil de l'eau. Ce bouton force une copie complète (recommandé une fois par jour).</p>
+    <p class="small muted" style="margin-top:10px">La synchronisation est <strong>automatique</strong> :
+      chaque appareil dépose ses saisies en ligne et y récupère celles des autres, sans rien perdre.
+      « Synchroniser maintenant » force un cycle immédiat ; « Nouvel instantané » crée une copie datée.</p>
   </div>
 
   <div class="card">
@@ -106,6 +110,20 @@ dans une seconde base en ligne (Supabase / PostgreSQL). En cas de perte du serve
   document.getElementById("btnRefresh").addEventListener("click", async () => {
     try { await Cav.api("/api/cloud/status"); } catch (e) {}
     location.reload();
+  });
+
+  document.getElementById("btnSync").addEventListener("click", async () => {
+    const btn = document.getElementById("btnSync");
+    const old = btn.textContent;
+    btn.disabled = true; btn.textContent = "Synchronisation…";
+    try {
+      const r = await Cav.api("/api/cloud/sync", { method: "POST", json: {} });
+      Cav.toast("Synchronisé : " + r.entries + " cellules", "ok");
+      setTimeout(() => location.reload(), 900);
+    } catch (e) {
+      Cav.toast("Échec de la synchronisation : " + e.message, "error");
+      btn.disabled = false; btn.textContent = old;
+    }
   });
 
   document.getElementById("btnPush").addEventListener("click", async () => {

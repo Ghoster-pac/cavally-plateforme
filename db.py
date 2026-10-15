@@ -236,7 +236,8 @@ def get_task_values(lot_key: str, task_id: str):
     con = connect()
     rows = con.execute(
         "SELECT row, task, field, value, updated_by, updated_at FROM entries "
-        "WHERE lot=? AND (task=? OR (task='__global__' AND ?='__global__'))",
+        "WHERE lot=? AND value IS NOT NULL "
+        "AND (task=? OR (task='__global__' AND ?='__global__'))",
         (lot_key, task_id, task_id),
     ).fetchall()
     con.close()
@@ -246,8 +247,8 @@ def get_task_values(lot_key: str, task_id: str):
 def get_lot_values(lot_key: str):
     con = connect()
     rows = con.execute(
-        "SELECT row, task, field, value, updated_by, updated_at FROM entries WHERE lot=?",
-        (lot_key,),
+        "SELECT row, task, field, value, updated_by, updated_at FROM entries "
+        "WHERE lot=? AND value IS NOT NULL", (lot_key,),
     ).fetchall()
     con.close()
     out = {}
@@ -274,9 +275,18 @@ def save_cells(updates: list, user: str):
         if oldv == val:
             continue
         if val is None:
-            con.execute("DELETE FROM entries WHERE lot=? AND row=? AND task=? AND field=?",
-                        (lot, row, task, field))
-            deletes.append({"lot": lot, "row": row, "task": task, "field": field})
+            # On ne supprime pas la ligne : on ecrit une « pierre tombale »
+            # (valeur vide horodatee) pour que la suppression se propage aux
+            # autres appareils lors de la synchronisation.
+            con.execute(
+                "INSERT INTO entries(lot,row,task,field,value,updated_by,updated_at) "
+                "VALUES(?,?,?,?,?,?,?) "
+                "ON CONFLICT(lot,row,task,field) DO UPDATE SET "
+                "value=excluded.value, updated_by=excluded.updated_by, updated_at=excluded.updated_at",
+                (lot, row, task, field, None, user, ts),
+            )
+            upserts.append({"lot": lot, "row": row, "task": task, "field": field,
+                            "value": None, "updated_by": user, "updated_at": ts})
         else:
             con.execute(
                 "INSERT INTO entries(lot,row,task,field,value,updated_by,updated_at) "
@@ -326,7 +336,8 @@ def _num(v):
 def build_summary():
     st = get_structure()
     con = connect()
-    allrows = con.execute("SELECT lot,row,task,field,value FROM entries").fetchall()
+    allrows = con.execute(
+        "SELECT lot,row,task,field,value FROM entries WHERE value IS NOT NULL").fetchall()
     con.close()
     data = {}
     for x in allrows:
@@ -412,7 +423,8 @@ def all_data_for_export():
     """Reconstruit {sheet: {row: {av,st,obs,comment}}} pour l'export."""
     st = get_structure()
     con = connect()
-    allrows = con.execute("SELECT lot,row,task,field,value FROM entries").fetchall()
+    allrows = con.execute(
+        "SELECT lot,row,task,field,value FROM entries WHERE value IS NOT NULL").fetchall()
     con.close()
     data = {}
     for x in allrows:
@@ -443,20 +455,34 @@ def all_data_for_export():
     return by_sheet
 
 
-def import_cells(parsed: dict, structure: dict, user: str):
-    """parsed: {sheet: {(row,col): value}} -> maj entries (av/st/obs/comment)."""
+def import_cells(parsed: dict, structure: dict, user: str, mode: str = "complete"):
+    """parsed: {sheet: {(row,col): value}} -> maj entries (av/st/obs/comment).
+
+    mode='complete' : ne remplit que les cellules encore vides (aucune donnee
+                      deja saisie n'est ecrasee) — comportement par defaut ;
+    mode='replace'  : met a jour toutes les cellules presentes dans le fichier.
+    """
+    mode = (mode or "complete").lower()
+    skipped = 0
     updates = []
     for lot in structure["lots"]:
         cm = col_map(lot)
+        existing = get_lot_values(lot["key"]) if mode != "replace" else None
         for (r, c), v in (parsed.get(lot["sheet"]) or {}).items():
             if c not in cm:
                 continue
             task, field = cm[c]
             if v is None or v == "":
                 continue
+            if existing is not None:
+                have = ((existing.get(r) or {}).get(task) or {}).get(field)
+                if have not in (None, ""):
+                    skipped += 1
+                    continue
             updates.append({"lot": lot["key"], "row": r, "task": task,
                             "field": field, "value": _to_text(field, v)})
-    return save_cells(updates, user)
+    n = save_cells(updates, user)
+    return {"saved": n, "skipped": skipped, "mode": mode}
 
 
 def get_custom_locals(lot_key: str):
@@ -512,6 +538,9 @@ def add_custom_local(lot_key: str, designation: str, niveau: str | None, user: s
         )
         con.commit()
         created = row_num
+    # si ce numero avait ete supprime auparavant, on annule la suppression
+    con.execute("DELETE FROM deleted_locals WHERE lot=? AND row_num=?", (lot_key, created))
+    con.commit()
     # rafraîchir le cache de structure (les locaux viennent de la base)
     global _STRUCT
     _STRUCT = None
@@ -519,7 +548,7 @@ def add_custom_local(lot_key: str, designation: str, niveau: str | None, user: s
     _cloud_mirror(custom_locals_upserts=[{
         "lot": lot_key, "row_num": created, "designation": designation,
         "niveau": niveau or "", "created_by": user, "created_at": ts,
-    }])
+    }], deleted_locals_deletes=[{"lot": lot_key, "row_num": created}])
     return created
 
 
@@ -528,16 +557,18 @@ def edit_local(lot_key: str, row_num: int, designation: str, niveau: str | None,
     exists = con.execute(
         "SELECT 1 FROM custom_locals WHERE lot=? AND row_num=?", (lot_key, row_num)
     ).fetchone()
+    ts = now_iso()
     if exists:
         con.execute(
-            "UPDATE custom_locals SET designation=?, niveau=? WHERE lot=? AND row_num=?",
-            (designation, niveau or "", lot_key, row_num),
+            "UPDATE custom_locals SET designation=?, niveau=?, created_by=?, created_at=? "
+            "WHERE lot=? AND row_num=?",
+            (designation, niveau or "", user, ts, lot_key, row_num),
         )
     else:
         con.execute(
             "INSERT INTO custom_locals(lot,row_num,designation,niveau,created_by,created_at) "
             "VALUES(?,?,?,?,?,?)",
-            (lot_key, row_num, designation, niveau or "", user, now_iso()),
+            (lot_key, row_num, designation, niveau or "", user, ts),
         )
     con.execute("DELETE FROM deleted_locals WHERE lot=? AND row_num=?", (lot_key, row_num))
     con.commit()
@@ -547,7 +578,7 @@ def edit_local(lot_key: str, row_num: int, designation: str, niveau: str | None,
     _cloud_mirror(
         custom_locals_upserts=[{
             "lot": lot_key, "row_num": row_num, "designation": designation,
-            "niveau": niveau or "", "created_by": user, "created_at": now_iso(),
+            "niveau": niveau or "", "created_by": user, "created_at": ts,
         }],
         deleted_locals_deletes=[{"lot": lot_key, "row_num": row_num}],
     )
@@ -555,25 +586,20 @@ def edit_local(lot_key: str, row_num: int, designation: str, niveau: str | None,
 
 def delete_custom_local(lot_key: str, row_num: int, user: str = "Anonyme"):
     con = connect()
-    # supprimer les saisies associées
+    ts = now_iso()
+    # supprimer les saisies associees
     con.execute("DELETE FROM entries WHERE lot=? AND row=?", (lot_key, row_num))
     con.execute("DELETE FROM edits WHERE lot=? AND row=?", (lot_key, row_num))
-    custom = con.execute(
-        "SELECT 1 FROM custom_locals WHERE lot=? AND row_num=?", (lot_key, row_num)
-    ).fetchone()
-    if custom:
-        con.execute("DELETE FROM custom_locals WHERE lot=? AND row_num=?", (lot_key, row_num))
-        mirror = {"entries_deletes": [{"lot": lot_key, "row": row_num}],
-                  "custom_locals_deletes": [{"lot": lot_key, "row_num": row_num}]}
-    else:
-        # ligne d'origine : on la masque (on ne peut pas retirer une ligne du gabarit Excel)
-        con.execute(
-            "INSERT OR REPLACE INTO deleted_locals(lot,row_num,deleted_by,deleted_at) VALUES(?,?,?,?)",
-            (lot_key, row_num, user, now_iso()),
-        )
-        mirror = {"entries_deletes": [{"lot": lot_key, "row": row_num}],
-                  "deleted_locals_upserts": [{"lot": lot_key, "row_num": row_num,
-                                              "deleted_by": user, "deleted_at": now_iso()}]}
+    con.execute("DELETE FROM custom_locals WHERE lot=? AND row_num=?", (lot_key, row_num))
+    # La suppression est TOUJOURS marquee par une pierre tombale : les autres
+    # appareils (telephones, ordinateurs) l'apprendront a la synchronisation.
+    con.execute(
+        "INSERT OR REPLACE INTO deleted_locals(lot,row_num,deleted_by,deleted_at) VALUES(?,?,?,?)",
+        (lot_key, row_num, user, ts),
+    )
+    mirror = {"custom_locals_deletes": [{"lot": lot_key, "row_num": row_num}],
+              "deleted_locals_upserts": [{"lot": lot_key, "row_num": row_num,
+                                          "deleted_by": user, "deleted_at": ts}]}
     con.commit()
     con.close()
     global _STRUCT
@@ -603,13 +629,54 @@ def forgot(seed_clear: bool = False):
 def count_all() -> dict:
     con = connect()
 
-    def c(t):
-        return con.execute("SELECT COUNT(*) AS n FROM " + t).fetchone()["n"]
+    def c(table, where=""):
+        return con.execute("SELECT COUNT(*) AS n FROM " + table + where).fetchone()["n"]
 
-    out = {"entries": c("entries"), "custom_locals": c("custom_locals"),
+    out = {"entries": c("entries", " WHERE value IS NOT NULL"),
+           "custom_locals": c("custom_locals"),
            "deleted_locals": c("deleted_locals")}
     con.close()
     return out
+
+
+def apply_merge(entries: list, customs: list, deleted: list) -> dict:
+    """Reecrit les 3 tables avec le resultat fusionne (une seule transaction).
+
+    Tant que la transaction n'est pas validee, la base locale reste intacte :
+    une coupure reseau pendant la synchronisation ne peut pas perdre de donnee.
+    """
+    con = connect()
+    try:
+        con.execute("DELETE FROM entries")
+        con.execute("DELETE FROM custom_locals")
+        con.execute("DELETE FROM deleted_locals")
+        con.executemany(
+            "INSERT INTO entries(lot,row,task,field,value,updated_by,updated_at) "
+            "VALUES(?,?,?,?,?,?,?)",
+            [(e["lot"], int(e["row"]), e["task"], e["field"], e.get("value"),
+              e.get("updated_by"), e.get("updated_at")) for e in entries],
+        )
+        con.executemany(
+            "INSERT INTO custom_locals(lot,row_num,designation,niveau,created_by,created_at) "
+            "VALUES(?,?,?,?,?,?)",
+            [(c["lot"], int(c["row_num"]), c.get("designation") or "",
+              c.get("niveau") or "", c.get("created_by"), c.get("created_at"))
+             for c in customs],
+        )
+        con.executemany(
+            "INSERT INTO deleted_locals(lot,row_num,deleted_by,deleted_at) VALUES(?,?,?,?)",
+            [(d["lot"], int(d["row_num"]), d.get("deleted_by"), d.get("deleted_at"))
+             for d in deleted],
+        )
+        con.commit()
+    except Exception:
+        con.rollback()
+        raise
+    finally:
+        con.close()
+    global _STRUCT
+    _STRUCT = None
+    return count_all()
 
 
 def dump_all() -> dict:

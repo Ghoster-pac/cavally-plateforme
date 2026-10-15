@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Importer un fichier Excel</h1>
 <p class="sub">Déposez un classeur déjà rempli (même modèle que « SUIVI TRAVAUX CAVALLY »). Les avancements,
-statuts et observations des 4 feuilles de lots seront fusionnés dans la base.</p>
+statuts et observations des 4 feuilles de lots seront <strong>ajoutés</strong> à la base.</p>
 
 <div class="grid cols-2">
   <div class="card">
@@ -11,18 +11,33 @@ statuts et observations des 4 feuilles de lots seront fusionnés dans la base.</
       <input type="hidden" name="user" id="userField">
       <label class="small muted">Fichier .xlsx</label><br>
       <input type="file" name="file" accept=".xlsx,.xlsm" required style="margin:10px 0 16px">
+
+      <fieldset style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:0 0 16px">
+        <legend class="small muted">Que faire des cellules déjà remplies ?</legend>
+        <label class="small" style="display:block;margin-bottom:8px">
+          <input type="radio" name="mode" value="complete" checked>
+          <strong>Compléter</strong> — ne remplit que les cellules encore vides
+          (aucune saisie existante n'est écrasée) <em>— recommandé</em>
+        </label>
+        <label class="small" style="display:block">
+          <input type="radio" name="mode" value="replace">
+          Mettre à jour — le fichier remplace aussi les valeurs déjà saisies
+        </label>
+      </fieldset>
+
       <p class="small muted">Les feuilles reconnues sont : AVANCEMENT PBS, AVANCEMENT CVC, AVCT CFO,
         AVANCEMENT CFA-SSI. Les formules de synthèse du fichier ne sont pas reprises (elles sont recalculées
         automatiquement à l'export).</p>
-      <button class="btn primary" type="submit">Importer et fusionner</button>
+      <button class="btn primary" type="submit">Importer</button>
     </form>
   </div>
   <div class="card">
     <strong>Bon à savoir</strong>
     <ul class="small">
-      <li>L'import <strong>écrase</strong> les valeurs existantes pour les cellules présentes dans le fichier.</li>
-      <li>Les cellules vides du fichier ne suppriment rien.</li>
+      <li>Par défaut, l'import <strong>ne supprime ni n'écrase rien</strong> : il ne remplit que les cases vides.</li>
+      <li>Les cellules vides du fichier ne modifient rien.</li>
       <li>Les niveaux/locaux doivent correspondre au modèle (les lignes sont repérées par numéro de ligne).</li>
+      <li>Le fichier est ensuite synchronisé automatiquement avec les téléphones et ordinateurs.</li>
       <li>Pour repartir du modèle vierge : <a href="{{ url_for('export_page') }}">générez puis réimportez</a>.</li>
     </ul>
   </div>

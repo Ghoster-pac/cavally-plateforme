@@ -122,11 +122,32 @@ const Cav = (() => {
 
   function initNet() {
     updateNetUI();
-    window.addEventListener("online", () => { updateNetUI(); flushQueue(); });
+    window.addEventListener("online", () => { updateNetUI(); flushQueue(); syncTick(); });
     window.addEventListener("offline", updateNetUI);
-    setInterval(flushQueue, 15000);           // nouvel essai périodique
-    window.addEventListener("focus", flushQueue);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) flushQueue(); });
+    setInterval(flushQueue, 15000);           // nouvel essai periodique
+    window.addEventListener("focus", () => { flushQueue(); syncTick(); });
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) { flushQueue(); syncTick(); } });
+    setInterval(syncTick, 30000);             // recupere les saisies des autres appareils
+  }
+
+  /* Synchronisation periodique : lit la copie en ligne et recharge la page si
+     les donnees ont change ailleurs, sauf pendant une saisie en cours. */
+  let lastSig = null;
+  function syncTick() {
+    if (!navigator.onLine || document.hidden) return;
+    api("/api/cloud/sync", { method: "POST", json: {} }).then((r) => {
+      if (!r || r.ok === false) return;
+      const sig = [r.entries, r.custom_locals, r.deleted_locals].join("|");
+      if (lastSig !== null && sig !== lastSig && !isEditing()) location.reload();
+      lastSig = sig;
+    }).catch(() => {});
+  }
+
+  function isEditing() {
+    const el = document.activeElement;
+    if (!el) return false;
+    const t = (el.tagName || "").toLowerCase();
+    return t === "input" || t === "textarea" || t === "select" || el.isContentEditable === true;
   }
 
   function initUserField() {

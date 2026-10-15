@@ -82,13 +82,14 @@ mode **Remplacer**. Toutes les données sont reconstruites depuis Supabase.
 ## Fonctionnement technique
 
 - `cloud.py` appelle l'API REST de Supabase (PostgREST) avec la clé publique.
-- **Miroir** : à chaque écriture locale, `db.py` pousse la ou les cellules
-  modifiées (upsert) — appel *best effort*, jamais bloquant.
-- **Disjoncteur** : après une erreur réseau, les envois sont suspendus ~60 s puis
-  repris automatiquement (la saisie reste instantanée).
-- **Copie complète** : la page *Sauvegarde* (ou la tâche planifiée) pousse toute
-  la base et enregistre un instantané JSON dans la table `backups` (10 derniers
-  conservés).
+- **Synchronisation bidirectionnelle** : chaque appareil lit et fusionne la copie en ligne.
+  Les saisies les plus récentes sont toujours préservées. Un import de fichier ne
+  remplit que les **cases vides** (mode « Compléter » par défaut) ; le mode
+  « Mettre à jour » permet de remplacer les valeurs déjà saisies.
+- La sauvegarde/restauration est **automatique** : synchronisation au premier
+  lancement, toutes les ~15 s, au retour en avant-plan (site + application), après
+  import/saisie, et un cycle toutes les ~20 s côté serveur. Un **instantané daté**
+  est enregistré périodiquement.
 
 ## Sécurité
 
